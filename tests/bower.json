@@ -1,0 +1,19 @@
+{
+  "name": "mloader.unittests",
+  "version": "0.0.1",
+  "homepage": "https://github.com/MiguelCastillo/MLoader",
+  "authors": [
+    "Miguel Castillo <manchagnu@gmail.com>"
+  ],
+  "description": "MLoader UnitTests",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/MiguelCastillo/MLoader.git"
+  },
+  "main": "main.js",
+  "dependencies": {
+    "jquery": "1.11.0",
+    "underscore": "",
+    "rjasmine": ""
+  }
+}
