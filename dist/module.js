@@ -118,11 +118,7 @@ var Module = (function(root) {
 
     // Array AMD style
     if (name instanceof Array) {
-      for (i = 0, length = name.length; i < length; i++) {
-        deps.push(Module.import(name[i], options));
-      }
-
-      return Module.Promise.when.apply((void 0), deps).done(ready || _noop);
+      return Module.import(name, options).done(ready || _noop);
     }
 
     // Pending module
@@ -145,19 +141,29 @@ var Module = (function(root) {
   /**
   * Import interface to load a module
   */
-  Module.import = function(name, options) {
-    var moduleMeta;
+  Module.import = function(names, options) {
+    var moduleMeta, i, length, name, deps = [];
 
-    if (name in pending === true) {
-      moduleMeta = pending[name]; delete pending[name];
-      deferred[name] = Module.traverse(moduleMeta);
-    }
-    else if (name in deferred === false) {
-      moduleMeta = Module.moduleMeta(name, options);
-      deferred[name] = Module.fetch(moduleMeta).then(Module.traverse);
+    if (typeof names === "string") {
+      names = [names];
     }
 
-    return deferred[name];
+    for (i = 0, length = names.length; i < length; i++) {
+      name = names[i];
+
+      if (name in pending === true) {
+        moduleMeta = pending[name]; delete pending[name];
+        deferred[name] = Module.traverse(moduleMeta);
+      }
+      else if (name in deferred === false) {
+        moduleMeta = Module.moduleMeta(name, options);
+        deferred[name] = Module.fetch(moduleMeta).then(Module.traverse);
+      }
+
+      deps.push(deferred[name]);
+    }
+
+    return Module.Promise.when.apply((void 0), deps);
   };
 
 
