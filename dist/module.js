@@ -3,9 +3,11 @@ var Module = (function(root) {
 
   ///
   /// From requirejs https://github.com/jrburke/requirejs. Thanks dude!
+  /// url regex http://regex101.com/r/aH9kH3/7
   ///
   var commentRegExp    = /(\/\*([\s\S]*?)\*\/|([^:]|^)\/\/(.*)$)/mg,
-      cjsRequireRegExp = /[^.]\s*require\s*\(\s*["']([^'"\s]+)["']\s*\)/g;
+      cjsRequireRegExp = /[^.]\s*require\s*\(\s*["']([^'"\s]+)["']\s*\)/g,
+      urlRegExp        = /^((https?:|file:)(\/\/\/?)((?:(?:[A-Za-z-]+:)?[\/\\]+)?[\d\w\.\s-]+)(?::(\d+))?)?((?:[A-Za-z-]+:[\/\\]*)?[\/\\\w\.()-]*)?(?:([?][^#]*)*(#.*))*/gmi;
 
   //
   // Modules are created/registered for consumption by other modules via the define
@@ -114,7 +116,7 @@ var Module = (function(root) {
   */
   Module.require = function(name, ready, options) {
     var deps = [];
-    var i, length, m;
+    var moduleMeta, i, length;
 
     // Array AMD style
     if (name instanceof Array) {
@@ -123,15 +125,15 @@ var Module = (function(root) {
 
     // Pending module
     if (name in pending === true) {
-      m = pending[name]; delete pending[name];
+      moduleMeta = pending[name]; delete pending[name];
 
-      for (i = 0, length = m.deps.length; i < length; i++) {
+      for (i = 0, length = moduleMeta.deps.length; i < length; i++) {
         // Traverse tree of dependencies breadth first
-        deps.push(Module.require(m.deps[i]));
+        deps.push(Module.require(moduleMeta.deps[i]));
       }
 
       // Move resolved module to modules bucket.
-      modules[m.name] = _result(m.factory, deps, Module.settings.global);
+      modules[moduleMeta.name] = _result(moduleMeta.factory, deps, Module.settings.global);
     }
 
     return modules[name];
@@ -142,7 +144,8 @@ var Module = (function(root) {
   * Import interface to load a module
   */
   Module.import = function(names, options) {
-    var moduleMeta, i, length, name, deps = [];
+    var deps = [];
+    var moduleMeta, i, length, name;
 
     if (typeof names === "string") {
       names = [names];
@@ -176,6 +179,7 @@ var Module = (function(root) {
     }
 
     moduleMeta.cjs=[];
+
     if (typeof moduleMeta.factory === 'function') {
       // Just save the state to avoid further type checks.
       moduleMeta.isFunction = true;
@@ -200,42 +204,24 @@ var Module = (function(root) {
   /**
   * Resolve a module dependencies and figure out what the module actually is.
   */
-  Module.resolve = function(m) {
-    var i, length;
-    var deps = [];
-
-    for (i = 0, length = m.deps.length; i < length; i++) {
-      deps.push(Module.import(m.deps[i]));
-    }
-
-    for (i = 0, length = m.cjs.length; i < length; i++) {
-      deps.push(Module.import(m.cjs[i]));
-    }
-
-    return Module.Promise.when.apply(m, deps).then(function() {
-      var i, length, deps = [];
-
-      // Only copy over the dependencies that are directly defined in the module
-      for ( i = 0, length = m.deps.length; i < length; i++ ) {
-        deps[i] = arguments[i];
-      }
-
-      m.resolved = deps;
-      return m;
+  Module.resolve = function(moduleMeta) {
+    return Module.Promise.when(Module.import(moduleMeta.deps), Module.import(moduleMeta.cjs)).then(function(dependecies /*,cjs*/) {
+      moduleMeta.resolved = dependecies;
+      return moduleMeta;
     });
   };
 
 
-  Module.injection = function(moduleMeta) {
+  Module.injection = function(moduleMeta, dependencies) {
     moduleMeta.exports = {};
-    modules[moduleMeta.name] = (new Function("Module", "module", "factory", Module.injection.__module))(Module, moduleMeta, moduleMeta.factory);
+    modules[moduleMeta.name] = (new Function("Module", "module", "factory", "dependencies", Module.injection.__module))(Module, moduleMeta, moduleMeta.factory, dependencies);
     return modules[moduleMeta.name];
   };
 
 
   Module.injection.__module = "" +
     "var exports = module.exports;\n var result;\n" +
-    "if(moduleMeta.isFunction){result = factory.apply(this, module.resolved);} else {result = factory;} \n" +
+    "if(moduleMeta.isFunction){result = factory.apply(this, dependencies || module.resolved);} else {result = factory;} \n" +
     "return result;";
 
 
@@ -253,7 +239,7 @@ var Module = (function(root) {
 
     return {
       name: name,
-      file: File.factory(fileName, options.baseUrl),
+      file: new File(fileName, options.baseUrl),
       settings: options
     };
   };
@@ -314,16 +300,6 @@ var Module = (function(root) {
       factory: factory
     };
   };
-
-
-  /*
-  Module.fetch = function(moduleMeta) {
-    return Promise.thenable($.ajax({
-      "url": moduleMeta.file.toUrl(),
-      "dataType": "text"
-    }));
-  };
-  */
 
 
   Module.fetch = function(moduleMeta) {
@@ -410,96 +386,196 @@ var Module = (function(root) {
 
 
   /**
-  * File parsers
   */
-  function File(settings, base) {
-    this.base     = base;
-    this.name     = settings.name;
-    this.path     = settings.path;
-    this.protocol = settings.protocol;
-  }
+  function File (file, base) {
+    var fileUri, baseUri, fileName, mergedPath;
 
-  /**
-  */
-  File.prototype.toUrl = function() {
-    var file = this;
-    var protocol = file.protocol ? file.protocol + "//" : "";
-    return protocol + file.path + "/" + file.name + ".js";
-  };
+    fileUri = File.parseUri(file);
 
-  /**
-  */
-  File.factory = function( file, base ) {
-    file = File.parsePath(file);
-    if ( file.protocol ) {
-      return new File(File.parseFile(file), base);
+    if (fileUri.protocol || !base) {
+      fileName = File.parseFileName(fileUri.path);
+    }
+    else {
+      baseUri    = File.parseUri(base);
+      mergedPath = File.mergePaths(fileUri.path, baseUri ? baseUri.path : "/");
+      fileName   = File.parseFileName(mergedPath);
     }
 
-    var baseUrl = File.parsePath(base);
-    var basePath = baseUrl.path.split("/"),
-        name = file.path.split("/"),
-        length = name.length, skip = 0;
+    this._file    = fileUri;
+    this.protocol = fileUri.protocol ? fileUri.protocol + fileUri.protocol.mark : undefined;
+    this.name     = fileName.name;
+    this.path     = fileName.path;
+  }
 
-    while ( length-- !== 0 ) {
-      if ( name[0] === ".." ) {
-        name.shift();
-        skip++;
+
+  /**
+  */
+  File.prototype.toUrl = function (extension) {
+    var file = this;
+    return (file.protocol || "") + (file.path || "") + file.name + (extension || ".js");
+  };
+
+
+  /**
+  * Parses out uri
+  */
+  File.parseUri = function(uriString) {
+    if (!uriString) {
+      throw new Error("Must provide a string to parse");
+    }
+
+    if (File.isHttpProtocol(uriString)) {
+      return File.parseHttpProtocol(uriString);
+    }
+    else {
+      return File.parseFileProtocol(uriString);
+    }
+  };
+
+
+  /**
+  * Parses out the string into file components
+  * return {object} file object
+  */
+  File.parseFileProtocol = function (uriString) {
+    var uriParts = /^(?:(file:)(\/\/\/?))?(([A-Za-z-]+:)?[/\\d\w\.\s-]+)/gmi.exec(uriString);
+    uriParts.shift();
+
+    // Make sure we sanitize the slashes
+    if (uriParts[2]) {
+      uriParts[2] = File.normalizeSlashes(uriParts[2]);
+    }
+
+    return {
+      protocol: uriParts[0],
+      protocolmark: uriParts[1],
+      path: uriParts[2],
+      drive: uriParts[3],
+      href: uriString,
+      uriParts: uriParts
+    };
+  };
+
+
+  /**
+  * Parses out a string into an http url
+  * @return {object} url object
+  */
+  File.parseHttpProtocol = function (uriString) {
+    var uriParts = /^((https?:)(\/\/)([\d\w\.-]+)(?::(\d+))?)?([\/\\\w\.()-]*)?(?:([?][^#]*)?(#.*)?)*/gmi.exec(uriString);
+    uriParts.shift();
+
+    // Make sure we sanitize the slashes
+    if (uriParts[5]) {
+      uriParts[5] = File.normalizeSlashes(uriParts[5]);
+    }
+
+    return {
+      origin: uriParts[0],
+      protocol: uriParts[1],
+      protocolmark: uriParts[2],
+      hostname: uriParts[3],
+      port: uriParts[4],
+      path: uriParts[5],
+      search: uriParts[6],
+      hash: uriParts[7],
+      href: uriString,
+      uriParts: uriParts
+    };
+  };
+
+
+  /**
+  * Tests if a uri has a protocol
+  * @return {boolean} if the uri has a protocol
+  */
+  File.hasProtocol = function(path) {
+    return /^(?:(https?|file)(:\/\/\/?))/g.test(path) === false;
+  };
+
+
+  /**
+  * Test is the input constains the file protocol delimiter.
+  * @return {boolean} True is it is a file protocol, othterwise false
+  */
+  File.isFileProtocol = function (protocolString) {
+    return /^file:/gmi.test(protocolString);
+  };
+
+
+  /**
+  * Test is the input constains the http/https protocol delimiter.
+  * @return {boolean} True is it is an http protocol, othterwise false
+  */
+  File.isHttpProtocol = function (protocolString) {
+    return /^https?:/gmi.test(protocolString);
+  };
+
+
+  /**
+  * Build and file object with the important pieces
+  */
+  File.parseFileName = function (fileString) {
+    var fileName;
+    var pathName = fileString.replace(/([^/]+)$/gmi, function(match) {
+      fileName = match;
+      return "";
+    });
+
+    return {
+      name: fileName,
+      path: pathName
+    };
+  };
+
+
+  /**
+  * Removes all forward and back slashes to forward slashes as well as all duplicates slashes
+  * @return {string} path with only one forward slash a path delimters
+  */
+  File.normalizeSlashes = function (path) {
+    return path.replace(/[\\/]+/g, "/");
+  };
+
+
+  /**
+  * Lets get rid of the trailing slash
+  * @return {string} without trailing slash(es)
+  */
+  File.stripTrailingSlashes = function(path) {
+    return path.replace(/[\\/]+$/, "");
+  };
+
+
+  /**
+  * Merges a path with a base.  This is used for handling relative paths.
+  * @return {string} Merge path
+  */
+  File.mergePaths = function(path, base) {
+    var pathParts = path.split("/"),
+        baseParts = (base || "").split("/"),
+        pathCount = pathParts.length,
+        skipCount = 0;
+
+    while (pathCount-- > 0) {
+      if (pathParts[0] === "..") {
+        pathParts.shift();
+        skipCount++;
       }
-      else if ( name[0] === "." ) {
-        name.shift();
+      else if (pathParts[0] === ".") {
+        pathParts.shift();
       }
       else {
         break;
       }
     }
 
-    skip = basePath.length > skip ? skip : basePath.length;
-    basePath.splice((basePath.length-1) - skip, skip);
-    basePath = basePath.join("/");
-    if (basePath.length) {
-      basePath = basePath + "/";
+    if (skipCount) {
+      skipCount = baseParts.length > skipCount ? skipCount : (baseParts.length - 1);
+      baseParts.splice(baseParts.length - skipCount, skipCount);
     }
-    return new File(File.parseFile({protocol: baseUrl.protocol, path: basePath + name.join("/") }), base);
-  };
 
-  /**
-  * Extract path and protocol
-  */
-  File.parsePath = function(file) {
-    var offset   = file.indexOf("://") + 3,
-        path     = offset !== 2 ? file.substr( offset ) : file,
-        protocol = offset !== 2 ? file.substr(0, offset - 2) : "";
-
-    return {
-      path: File.normalizeSlashes(path),
-      protocol: protocol
-    };
-  };
-
-  /**
-  * Build and file object with the important pieces
-  */
-  File.parseFile = function( file ) {
-    var fileParts = file.path.split("/");
-    return {
-      name: fileParts.pop(),
-      path: fileParts.join("/"),
-      protocol: file.protocol
-    };
-  };
-
-  /**
-  * Make sure we only have forward slashes and we dont have any duplicate slashes
-  */
-  File.normalizeSlashes = function( path ) {
-    return path.replace(/\/+|\\+/g, "/");
-  };
-
-  /**
-  * Lets get rid of the trailing slash
-  */
-  File.stripTrailingSlashes = function(path) {
-    return path.replace(/\/$/, "");
+    return File.normalizeSlashes(baseParts.join("/") + "/" + pathParts.join("/"));
   };
 
 

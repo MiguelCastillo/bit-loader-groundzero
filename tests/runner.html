@@ -10,11 +10,6 @@
     <link rel="shortcut icon" type="image/png" href="lib/jasmine-2.0.0/jasmine_favicon.png">
     <link rel="stylesheet" type="text/css" href="lib/jasmine-2.0.0/jasmine.css">
 
-<!--
-    <script src="lib/jquery/dist/jquery.js"></script>
-    <script src="lib/requirejs/require.js"></script>
-    <script src="../dist/module.js"></script>
--->
     <script src="lib/requirejs/require.js"></script>
     <script>
       // Configure requirejs all the tests are going to get their resources from
@@ -37,19 +32,6 @@
 
   <body>
     <script>
-//      require(["js/CJSsimpleObject"]).done(function(result){
-//        debugger;
-//      });
-//
-//      require(["rjasmine"]).done(function(result){
-//        debugger;
-//      });
-//
-//
-//      require(["rjasmine"], function(result){
-//        debugger;
-//      });
-
 
       // Load up rjasmine
       require(["rjasmine"], function (RJasmine) {
@@ -68,7 +50,8 @@
 
         rjasmine.ready(function() {
           require([
-            "specs/module"
+            "specs/module",
+            "specs/file"
           ], rjasmine.execute);
         });
       });
