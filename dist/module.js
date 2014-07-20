@@ -237,78 +237,41 @@ var Module = (function (root) {
    * Adapter interfaces to define modules
    */
   Module.adapters = function (name, deps, factory) {
-    var _signature = ["", typeof name, typeof deps, typeof factory].join("/"),
-      _adapter   = Module.adapters[_signature];
-    if (_adapter) {
-      return _adapter.apply(this, arguments);
+    var adapter = Module.adapters[["", typeof name, typeof deps, typeof factory].join("/")];
+    if (adapter) {
+      return adapter.apply(this, arguments);
     }
   };
 
-  Module.adapters["/string/function/undefined"] = function (name, factory) {
+  Module.adapters._main = function (name, deps, factory) {
     return {
       name: name,
-      deps: [],
+      deps: deps,
       factory: factory
-    };
-  };
-
-  Module.adapters["/string/object/undefined"] = function (name, data) {
-    return {
-      name: name,
-      deps: [],
-      factory: data
     };
   };
 
   Module.adapters["/string/object/function"] = function (name, deps, factory) {
-    return {
-      name: name,
-      deps: deps,
-      factory: factory
-    };
+    return Module.adapters._main(name, deps, factory);
+  };
+
+  Module.adapters["/string/function/undefined"] = function (name, factory) {
+    return Module.adapters._main(name, [], factory);
   };
 
   Module.adapters["/object/function/undefined"] = function (deps, factory) {
-    return {
-      deps: deps,
-      factory: factory
-    };
+    return Module.adapters._main(undefined, deps, factory);
   };
 
   Module.adapters["/object/undefined/undefined"] = function (data) {
-    return {
-      deps: [],
-      factory: data
-    };
+    return Module.adapters._main(undefined, [], data);
   };
 
-  Module.adapters["/function/undefined/undefined"] = function (factory) {
-    return {
-      deps: [],
-      factory: factory
-    };
-  };
-
-  Module.adapters["/string/undefined/undefined"] = function (factory) {
-    return {
-      deps: [],
-      factory: factory
-    };
-  };
-
-  Module.adapters["/number/undefined/undefined"] = function (factory) {
-    return {
-      deps: [],
-      factory: factory
-    };
-  };
-
-  Module.adapters["/undefined/undefined/undefined"] = function (factory) {
-    return {
-      deps: [],
-      factory: factory
-    };
-  };
+  Module.adapters["/string/object/undefined"]       = Module.adapters["/string/function/undefined"];
+  Module.adapters["/function/undefined/undefined"]  = Module.adapters["/object/undefined/undefined"];
+  Module.adapters["/string/undefined/undefined"]    = Module.adapters["/object/undefined/undefined"];
+  Module.adapters["/number/undefined/undefined"]    = Module.adapters["/object/undefined/undefined"];
+  Module.adapters["/undefined/undefined/undefined"] = Module.adapters["/object/undefined/undefined"];
 
 
   Module.fetch = function (moduleMeta) {
