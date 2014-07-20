@@ -1,12 +1,5 @@
-var Module = (function(root) {
+var Module = (function (root) {
   "use strict";
-
-  ///
-  /// From requirejs https://github.com/jrburke/requirejs. Thanks dude!
-  /// url regex http://regex101.com/r/aH9kH3/7
-  ///
-  var commentRegExp    = /(\/\*([\s\S]*?)\*\/|([^:]|^)\/\/(.*)$)/mg,
-      cjsRequireRegExp = /[^.]\s*require\s*\(\s*["']([^'"\s]+)["']\s*\)/g;
 
   //
   // Modules are created/registered for consumption by other modules via the define
@@ -40,22 +33,35 @@ var Module = (function(root) {
   // interface to load modules.
   //
 
-      // These two have data once pending modules have been resolved.
-  var deferred  = {}, // Promises that contain modules.  These just simply wrap the items in modules
-      modules   = {}, // Modules already resolved. Only module from the pending bucket transition to this
+  ///
+  /// From requirejs https://github.com/jrburke/requirejs. Thanks dude!
+  /// url regex http://regex101.com/r/aH9kH3/7
+  ///
+  var Module         = {},
+    commentRegExp    = /(\/\*([\s\S]*?)\*\/|([^:]|^)\/\/(.*)$)/mg,
+    cjsRequireRegExp = /[^.]\s*require\s*\(\s*["']([^'"\s]+)["']\s*\)/g,
 
-      // These two only have data during module defititions.
-      pending   = {}, // Modules that are available but not yet used. Only set through define calls.
-      anonymous = []; // Anonymous modules not yet used
+    // These two have data once pending modules have been resolved.
+    deferred  = {}, // Promises that contain modules.  These just simply wrap the items in modules
+    modules   = {}, // Modules already resolved. Only module from the pending bucket transition to this
+
+    // These two only have data during module defititions.
+    pending   = {}, // Modules that are available but not yet used. Only set through define calls.
+    anonymous = []; // Anonymous modules not yet used
 
 
-  function _extender(/*target, [source]+ */) {
+  /**
+   * target, [source]+
+   */
+  function _extender() {
     var sources = Array.prototype.slice.call(arguments),
-        target  = sources.shift();
+      target  = sources.shift(),
+      source,
+      property;
 
-    for (var source in sources) {
+    for (source in sources) {
       source = sources[source];
-      for (var property in source) {
+      for (property in source) {
         target[property] = source[property];
       }
     }
@@ -65,8 +71,8 @@ var Module = (function(root) {
 
 
   function _result(input, args, context) {
-    if (typeof(input) === "function") {
-      return input.apply(context, args||[]);
+    if (typeof (input) === "function") {
+      return input.apply(context, args || []);
     }
     return input;
   }
@@ -74,11 +80,6 @@ var Module = (function(root) {
 
   function _noop() {
   }
-
-
-  /**
-   */
-  var Module = {};
 
 
   /**
@@ -92,14 +93,14 @@ var Module = (function(root) {
    * Defines a module to be loaded and consumed by other modules.  Two types of modules
    * come through here, named and anonymous.
    */
-  Module.define = function() {
+  Module.define = function () {
     var m = Module.adapters.apply({}, arguments);
 
     if (!m) {
       throw new Error("Unable to process module format");
     }
     else if (m.name) {
-      if (m.name in pending === false) {
+      if (pending.hasOwnProperty(m.name) === false) {
         pending[m.name] = m;
       }
       else {
@@ -132,7 +133,7 @@ var Module = (function(root) {
     }
 
     // If the required module is in the pending bucket, then we just resolve it right away
-    else if (name in pending === true) {
+    else if (pending.hasOwnProperty(name) === true) {
       moduleMeta = pending[name]; delete pending[name];
 
       for (i = 0, length = moduleMeta.deps.length; i < length; i++) {
@@ -143,7 +144,7 @@ var Module = (function(root) {
       // Move resolved module to modules bucket.
       modules[moduleMeta.name] = _result(moduleMeta.factory, deps, Module.settings.global);
     }
-    else if (name in modules === false) {
+    else if (modules.hasOwnProperty(name) === false) {
       throw new Error("Unable to load " + moduleMeta.name);
     }
 
@@ -154,7 +155,7 @@ var Module = (function(root) {
   /**
    * Import interface to load a module
    */
-  Module.import = function(names, options) {
+  Module.import = function (names, options) {
     var deps = [];
     var moduleMeta, i, length, name;
 
@@ -165,11 +166,11 @@ var Module = (function(root) {
     for (i = 0, length = names.length; i < length; i++) {
       name = names[i];
 
-      if (name in pending === true) {
+      if (pending.hasOwnProperty(name) === true) {
         moduleMeta = pending[name]; delete pending[name];
         deferred[name] = Module.load(moduleMeta);
       }
-      else if (name in deferred === false) {
+      else if (deferred.hasOwnProperty(name) === false) {
         moduleMeta = Module.moduleMeta(name, options);
         deferred[name] = Module.fetch(moduleMeta).then(Module.load);
       }
@@ -184,7 +185,7 @@ var Module = (function(root) {
   /**
    * Parse module
    */
-  Module.load = function(moduleMeta) {
+  Module.load = function (moduleMeta) {
     if (!moduleMeta) {
       return;
     }
@@ -215,22 +216,22 @@ var Module = (function(root) {
   /**
    * Resolve a module dependencies and figure out what the module actually is.
    */
-  Module.resolve = function(moduleMeta) {
+  Module.resolve = function (moduleMeta) {
     var deps = moduleMeta.deps.length ? Module.import(moduleMeta.deps) : undefined,
       cjs = moduleMeta.cjs.length ? Module.import(moduleMeta.cjs) : undefined;
 
     return Module.Promise.when(deps, cjs)
-      .then(function(dependencies) {
+      .then(function (dependencies) {
         moduleMeta.resolved = moduleMeta.deps.length === 1 ? [dependencies] : dependencies;
         return moduleMeta;
-      }, function(error) {
+      }, function (error) {
         Module.logger.log(error);
         return error;
       });
   };
 
 
-  Module.injection = function(moduleMeta, dependencies) {
+  Module.injection = function (moduleMeta, dependencies) {
     var execModule = (new Function("Module", "module", "factory", "dependencies", Module.injection.__module));
     return (modules[moduleMeta.name] = execModule(Module, moduleMeta, moduleMeta.factory, dependencies));
   };
@@ -250,7 +251,7 @@ var Module = (function(root) {
    // is where we are storing information such as anonymously modules, names modules, exports and so on.
    // This information is used to figure out if we have and AMD, CJS, or just a plain ole module pattern.
    */
-  Module.moduleMeta = function(name, options) {
+  Module.moduleMeta = function (name, options) {
     options = options || Module.settings;
     options.baseUrl = options.baseUrl || Module.settings.baseUrl;
     var fileName = Module.settings.paths[name] || name;
@@ -266,15 +267,15 @@ var Module = (function(root) {
   /**
    * Adapter interfaces to define modules
    */
-  Module.adapters = function(name, deps, factory) {
-    var _signature = ["", typeof name, typeof deps, typeof factory].join("/");
-    var _adapter   = Module.adapters[_signature];
-    if ( _adapter ) {
+  Module.adapters = function (name, deps, factory) {
+    var _signature = ["", typeof name, typeof deps, typeof factory].join("/"),
+      _adapter   = Module.adapters[_signature];
+    if (_adapter) {
       return _adapter.apply(this, arguments);
     }
   };
 
-  Module.adapters["/string/function/undefined"] = function(name, factory) {
+  Module.adapters["/string/function/undefined"] = function (name, factory) {
     return {
       name: name,
       deps: [],
@@ -282,7 +283,7 @@ var Module = (function(root) {
     };
   };
 
-  Module.adapters["/string/object/undefined"] = function(name, data) {
+  Module.adapters["/string/object/undefined"] = function (name, data) {
     return {
       name: name,
       deps: [],
@@ -290,7 +291,7 @@ var Module = (function(root) {
     };
   };
 
-  Module.adapters["/string/object/function"] = function(name, deps, factory) {
+  Module.adapters["/string/object/function"] = function (name, deps, factory) {
     return {
       name: name,
       deps: deps,
@@ -298,42 +299,42 @@ var Module = (function(root) {
     };
   };
 
-  Module.adapters["/object/function/undefined"] = function(deps, factory) {
+  Module.adapters["/object/function/undefined"] = function (deps, factory) {
     return {
       deps: deps,
       factory: factory
     };
   };
 
-  Module.adapters["/object/undefined/undefined"] = function(data) {
+  Module.adapters["/object/undefined/undefined"] = function (data) {
     return {
       deps: [],
       factory: data
     };
   };
 
-  Module.adapters["/function/undefined/undefined"] = function(factory) {
+  Module.adapters["/function/undefined/undefined"] = function (factory) {
     return {
       deps: [],
       factory: factory
     };
   };
 
-  Module.adapters["/string/undefined/undefined"] = function(factory) {
+  Module.adapters["/string/undefined/undefined"] = function (factory) {
     return {
       deps: [],
       factory: factory
     };
   };
 
-  Module.adapters["/number/undefined/undefined"] = function(factory) {
+  Module.adapters["/number/undefined/undefined"] = function (factory) {
     return {
       deps: [],
       factory: factory
     };
   };
 
-  Module.adapters["/undefined/undefined/undefined"] = function(factory) {
+  Module.adapters["/undefined/undefined/undefined"] = function (factory) {
     return {
       deps: [],
       factory: factory
@@ -341,7 +342,7 @@ var Module = (function(root) {
   };
 
 
-  Module.fetch = function(moduleMeta) {
+  Module.fetch = function (moduleMeta) {
     var pending   = Module.Promise.defer();
     var moduleUrl = moduleMeta.file.toUrl();
     var head      = document.getElementsByTagName("head")[0] || document.documentElement;
@@ -528,7 +529,7 @@ var Module = (function(root) {
    * Tests if a uri has a protocol
    * @return {boolean} if the uri has a protocol
    */
-  File.hasProtocol = function(path) {
+  File.hasProtocol = function (path) {
     return /^(?:(https?|file)(:\/\/\/?))/g.test(path) === false;
   };
 
@@ -581,7 +582,7 @@ var Module = (function(root) {
    * Lets get rid of the trailing slash
    * @return {string} without trailing slash(es)
    */
-  File.stripTrailingSlashes = function(path) {
+  File.stripTrailingSlashes = function (path) {
     return path.replace(/[\\/]+$/, "");
   };
 
@@ -590,7 +591,7 @@ var Module = (function(root) {
    * Merges a path with a base.  This is used for handling relative paths.
    * @return {string} Merge path
    */
-  File.mergePaths = function(path, base) {
+  File.mergePaths = function (path, base) {
     var pathParts = path.split("/"),
         baseParts = (base || "").split("/"),
         pathCount = pathParts.length,
@@ -705,7 +706,7 @@ Module.define('src/promise',[
    * Small Promise
    */
   function Promise(resolver, options) {
-    if ( this instanceof Promise === false ) {
+    if (this instanceof Promise === false) {
       return new Promise(resolver, options);
     }
 
@@ -717,7 +718,7 @@ Module.define('src/promise',[
      * that the callbacks can be registered in the order they come in.
      */
 
-    function then(onResolved, onRejected) {
+    function then (onResolved, onRejected) {
       return stateManager.then(onResolved, onRejected);
     }
 
@@ -725,36 +726,36 @@ Module.define('src/promise',[
     then.constructor  = Promise;
     then.stateManager = stateManager;
 
-    function done(cb) {
+    function done (cb) {
       stateManager.enqueue(states.resolved, cb);
       return target.promise;
     }
 
-    function fail(cb) {
+    function fail (cb) {
       stateManager.enqueue(states.rejected, cb);
       return target.promise;
     }
 
-    function always(cb) {
+    function always (cb) {
       stateManager.enqueue(states.always, cb);
       return target.promise;
     }
 
-    function notify(cb) {
+    function notify (cb) {
       stateManager.enqueue(states.notify, cb);
       return target.promise;
     }
 
-    function state() {
+    function state () {
       return strStates[stateManager.state];
     }
 
-    function resolve() {
+    function resolve () {
       stateManager.transition(states.resolved, this, arguments);
       return target;
     }
 
-    function reject() {
+    function reject () {
       stateManager.transition(states.rejected, this, arguments);
       return target;
     }
@@ -777,7 +778,7 @@ Module.define('src/promise',[
     };
 
     // Interface to allow to post pone calling the resolver as long as its not needed
-    if ( typeof(resolver) === "function" ) {
+    if (typeof(resolver) === "function") {
       resolver.call(target, target.resolve, target.reject);
     }
   }
@@ -824,7 +825,7 @@ Module.define('src/promise',[
   /**
    * StateManager is the state manager for a promise
    */
-  function StateManager(promise, options) {
+  function StateManager (promise, options) {
     // Initial state is pending
     this.state = states.pending;
 
@@ -891,7 +892,7 @@ Module.define('src/promise',[
 
       this.queue = null;
 
-      for ( ; i < length; i++ ) {
+      for (; i < length; i++) {
         item = queue[i];
         this.enqueue(item.state, item.cb, sync);
       }
@@ -918,12 +919,12 @@ Module.define('src/promise',[
   /**
    * Thenable resolution
    */
-  function Resolution(promise) {
+  function Resolution (promise) {
     this.promise = promise;
   }
 
   // Notify when a promise has change state.
-  Resolution.prototype.notify = function(onResolved, onRejected) {
+  Resolution.prototype.notify = function (onResolved, onRejected) {
     var _self = this;
     return function notify(state, value) {
       var handler = (onResolved || onRejected) && (state === states.resolved ? (onResolved || onRejected) : (onRejected || onResolved));
@@ -931,7 +932,7 @@ Module.define('src/promise',[
         _self.context  = this;
         _self.finalize(state, handler ? [handler.apply(this, value)] : value);
       }
-      catch(ex) {
+      catch (ex) {
         _self.promise.reject.call(_self.context, ex);
       }
     };
@@ -942,7 +943,7 @@ Module.define('src/promise',[
   // resolve the result
   Resolution.prototype.chain = function (state) {
     var _self = this;
-    return function resolve() {
+    return function resolve () {
       try {
         // Handler can only be called once!
         if ( !_self.resolved ) {
@@ -951,7 +952,7 @@ Module.define('src/promise',[
           _self.finalize(state, arguments);
         }
       }
-      catch(ex) {
+      catch (ex) {
         _self.promise.reject.call(_self.context, ex);
       }
     };
