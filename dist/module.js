@@ -711,14 +711,14 @@ Module.define('src/promise',[
     }
 
     var target       = this;
-    var stateManager = new StateManager(target, options || {});
+    var stateManager = new StateManager(options || {});
 
     /**
      * callback registration (then, done, fail, always) must be synchrounous so
      * that the callbacks can be registered in the order they come in.
      */
 
-    function then (onResolved, onRejected) {
+    function then(onResolved, onRejected) {
       return stateManager.then(onResolved, onRejected);
     }
 
@@ -726,36 +726,36 @@ Module.define('src/promise',[
     then.constructor  = Promise;
     then.stateManager = stateManager;
 
-    function done (cb) {
+    function done(cb) {
       stateManager.enqueue(states.resolved, cb);
       return target.promise;
     }
 
-    function fail (cb) {
+    function fail(cb) {
       stateManager.enqueue(states.rejected, cb);
       return target.promise;
     }
 
-    function always (cb) {
+    function always(cb) {
       stateManager.enqueue(states.always, cb);
       return target.promise;
     }
 
-    function notify (cb) {
+    function notify(cb) {
       stateManager.enqueue(states.notify, cb);
       return target.promise;
     }
 
-    function state () {
+    function state() {
       return strStates[stateManager.state];
     }
 
-    function resolve () {
+    function resolve() {
       stateManager.transition(states.resolved, this, arguments);
       return target;
     }
 
-    function reject () {
+    function reject() {
       stateManager.transition(states.rejected, this, arguments);
       return target;
     }
@@ -778,7 +778,7 @@ Module.define('src/promise',[
     };
 
     // Interface to allow to post pone calling the resolver as long as its not needed
-    if (typeof(resolver) === "function") {
+    if (typeof (resolver) === "function") {
       resolver.call(target, target.resolve, target.reject);
     }
   }
@@ -825,7 +825,7 @@ Module.define('src/promise',[
   /**
    * StateManager is the state manager for a promise
    */
-  function StateManager (promise, options) {
+  function StateManager(options) {
     // Initial state is pending
     this.state = states.pending;
 
@@ -839,7 +839,7 @@ Module.define('src/promise',[
   // action with the callback based on that.
   StateManager.prototype.enqueue = function (state, cb, sync) {
     var _self = this,
-        _state = _self.state;
+      _state  = _self.state;
 
     if (!_state) {
       (this.queue || (this.queue = [])).push({
@@ -850,7 +850,7 @@ Module.define('src/promise',[
 
     // If resolved, then lets try to execute the queue
     else if (_state === state || states.always === state) {
-      if ( sync ) {
+      if (sync) {
         cb.apply(_self.context, _self.value);
       }
       else {
@@ -862,7 +862,7 @@ Module.define('src/promise',[
 
     // Do proper notify events
     else if (states.notify === state) {
-      if ( sync ) {
+      if (sync) {
         cb.call(_self.context, _self.state, _self.value);
       }
       else {
@@ -911,7 +911,7 @@ Module.define('src/promise',[
     }
 
     resolution = new Resolution(new Promise());
-    this.enqueue( states.notify, resolution.notify(onResolved, onRejected) );
+    this.enqueue(states.notify, resolution.notify(onResolved, onRejected));
     return resolution.promise;
   };
 
@@ -919,7 +919,7 @@ Module.define('src/promise',[
   /**
    * Thenable resolution
    */
-  function Resolution (promise) {
+  function Resolution(promise) {
     this.promise = promise;
   }
 
@@ -929,7 +929,7 @@ Module.define('src/promise',[
     return function notify(state, value) {
       var handler = (onResolved || onRejected) && (state === states.resolved ? (onResolved || onRejected) : (onRejected || onResolved));
       try {
-        _self.context  = this;
+        _self.context = this;
         _self.finalize(state, handler ? [handler.apply(this, value)] : value);
       }
       catch (ex) {
@@ -943,7 +943,7 @@ Module.define('src/promise',[
   // resolve the result
   Resolution.prototype.chain = function (state) {
     var _self = this;
-    return function resolve () {
+    return function resolve() {
       try {
         // Handler can only be called once!
         if ( !_self.resolved ) {
@@ -972,9 +972,10 @@ Module.define('src/promise',[
     }
 
     // 2.3.2
-    // Shortcut if the incoming promise is an instance of SPromise
+    // Shortcut if the incoming promise is an instance of spromise
     if (then && then.constructor === Promise) {
-      return then.stateManager.enqueue(states.notify, this.notify(), true);
+      then.stateManager.enqueue(states.notify, this.notify(), true);
+      return;
     }
 
     // 2.3.3
@@ -995,7 +996,7 @@ Module.define('src/promise',[
     // 2.3.4
     // Just resolve the promise
     else {
-      promise.then.stateManager.transition(state, context, data);
+      promise.then.stateManager.transition(state, context, data, true);
     }
   };
 
