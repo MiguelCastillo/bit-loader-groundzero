@@ -9,7 +9,7 @@ define(["dist/module"], function(Module) {
   });
 
 
-  describe("Modules with no dependencies", function() {
+  describe("Modules with simple dependencies", function() {
     it("empty object", function() {
       return Module.import("tests/js/empty").done(function(result) {
         expect(typeof result).toBe("object");
@@ -46,10 +46,18 @@ define(["dist/module"], function(Module) {
         expect(result.hello).toBe("world");
       });
     });
+
+    it("Multiple dependencies", function() {
+      return Module.import(["tests/js/number", "tests/js/string", "tests/js/number"]).done(function(number, string, number2) {
+        expect(number).toBe(3.14);
+        expect(string).toBe("Just some string value");
+        expect(number2).toBe(3.14);
+      });
+    });
   });
 
 
-  describe("Modules with dependencies", function() {
+  describe("Modules with nested dependencies", function() {
     it("One dependency", function() {
       return Module.import("tests/js/onedependency").done(function(result) {
         expect(typeof result).toBe("object");
