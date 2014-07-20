@@ -152,7 +152,6 @@ define(["dist/module"], function(Module) {
 
     it("all paths", function() {
       return Module.import("pathconfig").done(function(result) {
-        console.log(result);
         expect(typeof result).toBe("object");
         expect(typeof result.one).toBe("number");
         expect(result.one).toBe(1900);
