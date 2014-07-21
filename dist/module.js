@@ -10,13 +10,11 @@ var Module = (function (root) {
     commentRegExp    = /(\/\*([\s\S]*?)\*\/|([^:]|^)\/\/(.*)$)/mg,
     cjsRequireRegExp = /[^.]\s*require\s*\(\s*["']([^'"\s]+)["']\s*\)/g,
 
-    // These two have data once pending modules have been resolved.
+    // Module buckets
     deferred  = {}, // Promises that contain modules.  These just simply wrap the items in modules
-    modules   = {}, // Modules already resolved. Only module from the pending bucket transition to this
-
-    // These two only have data during module defititions.
-    pending   = {}, // Modules that are available but not yet used. Only set through define calls.
-    anonymous = []; // Anonymous modules not yet used
+    modules   = {}, // Modules already resolved
+    metas     = {}, // Bucket with all modules meta data
+    anonymous = []; // Anonymous modules not yet used.  Only used when a modules is being defined
 
 
   /**
@@ -47,8 +45,7 @@ var Module = (function (root) {
   }
 
 
-  function _noop() {
-  }
+  function _noop() {}
 
 
   /**
@@ -69,11 +66,12 @@ var Module = (function (root) {
       throw new Error("Unable to process module format");
     }
     else if (m.name) {
-      if (pending.hasOwnProperty(m.name) === false) {
-        pending[m.name] = m;
+      // Do no allow module to override other modules...
+      if (modules.hasOwnProperty(m.name) || metas.hasOwnProperty(m.name)) {
+        throw new Error("Module " + m.name + " is already defined");
       }
       else {
-        throw new Error("Module " + m.name + " is already defined");
+        metas[m.name] = m;
       }
     }
     else {
@@ -101,23 +99,25 @@ var Module = (function (root) {
       return Module.import(name, options).done(ready || _noop);
     }
 
-    // If the required module is in the pending bucket, then we just resolve it right away
-    else if (pending.hasOwnProperty(name) === true) {
-      moduleMeta = pending[name]; delete pending[name];
+    else if (modules.hasOwnProperty(name)) {
+      return modules[name];
+    }
+
+    // If the required module isn't resolved, then resolving it is what we need to do next.
+    else if (metas.hasOwnProperty(name) === true) {
+      moduleMeta = metas[name];
 
       for (i = 0, length = moduleMeta.deps.length; i < length; i++) {
         // Traverse tree of dependencies breadth first
-        deps.push(Module.require(moduleMeta.deps[i]));
+        deps.push(modules[moduleMeta.deps[i]] || Module.require(moduleMeta.deps[i]));
       }
 
       // Move resolved module to modules bucket.
-      modules[moduleMeta.name] = _result(moduleMeta.factory, deps, Module.settings.global);
+      return (modules[moduleMeta.name] = _result(moduleMeta.factory, deps, Module.settings.global));
     }
-    else if (modules.hasOwnProperty(name) === false) {
+    else {
       throw new Error("Unable to load " + moduleMeta.name);
     }
-
-    return modules[name];
   };
 
 
@@ -135,13 +135,13 @@ var Module = (function (root) {
     for (i = 0, length = names.length; i < length; i++) {
       name = names[i];
 
-      if (pending.hasOwnProperty(name) === true) {
-        moduleMeta = pending[name]; delete pending[name];
-        deferred[name] = Module.load(moduleMeta);
-      }
-      else if (deferred.hasOwnProperty(name) === false) {
-        moduleMeta = Module.moduleMeta(name, options);
-        deferred[name] = Module.fetch(moduleMeta).then(Module.load);
+      if (!deferred.hasOwnProperty(name)) {
+        if (metas.hasOwnProperty(name)) {
+          deferred[name] = Module.load(name);
+        }
+        else {
+          deferred[name] = Module.fetch(Module.moduleMeta(name, options)).then(Module.load);
+        }
       }
 
       deps.push(deferred[name]);
@@ -154,12 +154,8 @@ var Module = (function (root) {
   /**
    * Parse module
    */
-  Module.load = function (moduleMeta) {
-    if (!moduleMeta) {
-      return;
-    }
-
-    moduleMeta.cjs = [];
+  Module.load = function (name) {
+    var moduleMeta = metas[name];
 
     if (typeof moduleMeta.factory === 'function') {
       // Just save the type to avoid further type checks.
@@ -178,21 +174,26 @@ var Module = (function (root) {
         });
     }
 
-    return Module.resolve(moduleMeta).then(Module.injection);
+    return Module.resolve(name)
+      .then(Module.injection)
+      .done(function(result) {
+        modules[name] = result;
+      });
   };
 
 
   /**
    * Resolve a module dependencies and figure out what the module actually is.
    */
-  Module.resolve = function (moduleMeta) {
-    var deps = moduleMeta.deps.length ? Module.import(moduleMeta.deps) : undefined,
+  Module.resolve = function (name) {
+    var moduleMeta = metas[name],
+      deps = moduleMeta.deps.length ? Module.import(moduleMeta.deps) : undefined,
       cjs = moduleMeta.cjs.length ? Module.import(moduleMeta.cjs) : undefined;
 
     return Module.Promise.when(deps, cjs)
       .then(function (dependencies) {
         moduleMeta.resolved = moduleMeta.deps.length === 1 ? [dependencies] : dependencies;
-        return moduleMeta;
+        return name;
       }, function (error) {
         Module.logger.log(error);
         return error;
@@ -200,9 +201,10 @@ var Module = (function (root) {
   };
 
 
-  Module.injection = function (moduleMeta, dependencies) {
+  Module.injection = function (name, dependencies) {
+    var moduleMeta = metas[name];
     var execModule = (new Function("Module", "module", "factory", "dependencies", Module.injection.__module));
-    return (modules[moduleMeta.name] = execModule(Module, moduleMeta, moduleMeta.factory, dependencies));
+    return execModule(Module, moduleMeta, moduleMeta.factory, dependencies);
   };
 
 
@@ -245,6 +247,7 @@ var Module = (function (root) {
 
   Module.adapters._main = function (name, deps, factory) {
     return {
+      cjs: [],
       name: name,
       deps: deps,
       factory: factory
@@ -275,7 +278,7 @@ var Module = (function (root) {
 
 
   Module.fetch = function (moduleMeta) {
-    var pending   = Module.Promise.defer();
+    var deferred  = Module.Promise.defer();
     var moduleUrl = moduleMeta.file.toUrl();
     var head      = document.getElementsByTagName("head")[0] || document.documentElement;
     var script    = document.createElement("script");
@@ -304,7 +307,7 @@ var Module = (function (root) {
 
         // Get the module id that just finished and load it up!
         var moduleName = script.getAttribute("module-name");
-        var mod        = pending[moduleName];
+        var mod        = metas[moduleName];
 
         // Check if the module was loaded as a named module or an anonymous module.
         // If it was loaded as an anonymous module, then we need to manually add it
@@ -315,14 +318,14 @@ var Module = (function (root) {
 
           // Make module available as pending resolution so that it can be loaded
           // whenever it is requested as dependency.
-          pending[mod.name] = mod;
+          metas[mod.name] = mod;
         }
 
         // Cleanup stuff used by the script.
         anonymous = [];
 
         // Resolve with emtpty string so that moduleMeta can be processed
-        pending.resolve(mod);
+        deferred.resolve(moduleName);
 
         // Handle memory leak in IE
         script.onload = script.onreadystatechange = null;
@@ -333,7 +336,7 @@ var Module = (function (root) {
     };
 
     head.appendChild(script);
-    return pending.promise;
+    return deferred.promise;
   };
 
 
@@ -557,7 +560,7 @@ var Module = (function (root) {
   // Set promise provider
   Module.setPromiseProvider = function(promise) {
     deferred       = {};
-    pending        = {};
+    metas          = {};
     modules        = {};
     Module.Promise = promise;
   };
