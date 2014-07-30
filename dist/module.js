@@ -20,9 +20,9 @@ var Module = (function (root) {
   /**
    * target, [source]+
    */
-  function _extender() {
+  function _extend() {
     var sources = Array.prototype.slice.call(arguments),
-      target  = sources.shift(),
+      target = sources.shift(),
       source,
       property;
 
@@ -82,17 +82,16 @@ var Module = (function (root) {
 
   /**
    * AMD/CJS compliant require interface.
-   *
-   * @name can be an array or string module name
-   * @ready is the callback when the module(s) is loaded.
    * If multiple modules are to be loaded, a promise object is also returned. If a single module
    * is required in CJS format, then the resolved module is returned.
    *
-   * @return promise object
+   * @param {string} name Array of string module name or a single string module name
+   * @param {function} ready is the callback called when the module(s) is loaded.
+   *
+   * @return {Promise | Module}
    */
-  Module.require = function(name, ready, options) {
-    var deps = [];
-    var moduleMeta, i, length;
+  Module.require = function (name, ready, options) {
+    var deps = [], moduleMeta, i, length;
 
     // Array AMD style
     if (name instanceof Array) {
@@ -122,16 +121,26 @@ var Module = (function (root) {
 
 
   /**
-   * Import interface to load a module
+   * Import interface to load a module.  This interface will return a promise that when
+   * resolved will have the module itself.
+   *
+   * @param {string | array} names is the name or array of names of the module(s) that need to be
+   *   imported
+   * @param {!object} options settings used for the module to configure the modules being loaded
+   * @return {Promise} promise that will contain the module once it's resolved.
    */
   Module.import = function (names, options) {
-    var deps = [];
-    var moduleMeta, i, length, name;
+    var deps = [], moduleMeta, i, length, name;
 
+    // If names is a string, then we will just make an array with names as the only item
+    // and continue processing. This is to simplify the exposed interface so that importing
+    // a single module does not force everyone to pass in the array.
     if (typeof names === "string") {
       names = [names];
     }
 
+    // This logic figures out if the module's dependencies need to be resolved and if
+    // and if they also need to be downloaded.
     for (i = 0, length = names.length; i < length; i++) {
       name = names[i];
 
@@ -140,7 +149,12 @@ var Module = (function (root) {
           deferred[name] = Module.load(name);
         }
         else {
-          deferred[name] = Module.fetch(Module.moduleMeta(name, options)).then(Module.load);
+          // If shim, then resolve its dependencies first, then load the shimmed module...  Shimmed
+          // modules don't actually have a way to define dependencies, so they need to be loaded for
+          // them.
+
+          moduleMeta = Module.moduleMeta(name, options);
+          deferred[name] = Module.fetch(moduleMeta).then(Module.load);
         }
       }
 
@@ -152,7 +166,9 @@ var Module = (function (root) {
 
 
   /**
-   * Parse module
+   * Processes the module content if it's a function in order to do a bit of cleanup before
+   * the module dependencies are injected.  Here is where cjs defintions in the code are
+   * processed so that they can also be loaded as dependencies.
    */
   Module.load = function (name) {
     var moduleMeta = metas[name];
@@ -183,7 +199,7 @@ var Module = (function (root) {
 
 
   /**
-   * Resolve a module dependencies and figure out what the module actually is.
+   * Resolve a module's dependencies, including cjs imports
    */
   Module.resolve = function (name) {
     var moduleMeta = metas[name],
@@ -201,6 +217,16 @@ var Module = (function (root) {
   };
 
 
+  /**
+   * Injects the list of dependencies to a specific module.  The dependencies themeselves are fully resolved modules
+   * and not a module names. This is very valuable during unit tests where a particular module need to be created with
+   * specific mocked out code.
+   *
+   * @param {string} name is the name of the module that needs to be processed
+   * @param {Array} dependencies is an array of fully resolved modules
+   *
+   * @return {Module} fully loaded module with all its dependencies.
+   */
   Module.injection = function (name, dependencies) {
     var moduleMeta = metas[name];
     var execModule = (new Function("Module", "module", "factory", "dependencies", Module.injection.__module));
@@ -223,9 +249,29 @@ var Module = (function (root) {
    // This information is used to figure out if we have and AMD, CJS, or just a plain ole module pattern.
    */
   Module.moduleMeta = function (name, options) {
-    options = options || Module.settings;
-    options.baseUrl = options.baseUrl || Module.settings.baseUrl;
-    var fileName = Module.settings.paths[name] || name;
+    options = _extend({}, options, Module.settings);
+    var i, length, pkg;
+    var fileName = options.paths[name] || name;
+    var packages = options.packages;
+
+    // Go through the packages and figure if the module is actually configured as such.
+    for (i = 0, length = packages.length; i < length; i++) {
+      pkg = packages[i] || '';
+      if (pkg.name === name || pkg === name) {
+        fileName = (pkg.location || pkg) + "/" + (pkg.main || "main.js");
+        break;
+      }
+    }
+
+    var shimName;
+
+    // Once the module has been fully resolved, we finally added to the list of available modules
+    if (options.shim.hasOwnProperty(name)) {
+      shimName = options.shim[name].exports || name;
+      if (root.hasOwnProperty(name)) {
+        modules[name] = root[name];
+      }
+    }
 
     return {
       name: name,
@@ -277,6 +323,9 @@ var Module = (function (root) {
   Module.adapters["/undefined/undefined/undefined"] = Module.adapters["/object/undefined/undefined"];
 
 
+  /**
+   * Fetches a particular module from a stream.  Generally a remote javascript file sitting out in a server
+   */
   Module.fetch = function (moduleMeta) {
     var deferred  = Module.Promise.defer();
     var moduleUrl = moduleMeta.file.toUrl();
@@ -341,7 +390,7 @@ var Module = (function (root) {
 
 
   Module.configure = function (settings) {
-    _extender(Module.settings, settings);
+    _extend(Module.settings, settings);
 
     if (settings.makeGlobal) {
       Module.makeGlobal();
@@ -356,7 +405,9 @@ var Module = (function (root) {
     baseUrl: "",
     cache: true,
     deps: [],
-    paths: {}
+    paths: {},
+    shim: {},
+    packages: []
   };
 
 
@@ -577,6 +628,11 @@ var Module = (function (root) {
 
 
 /**
+ * Load Promise definition
+ */
+
+(function(define) {
+/**
  * spromise Copyright (c) 2014 Miguel Castillo.
  * Licensed under MIT
  *
@@ -590,7 +646,7 @@ var Module = (function (root) {
  */
 
 
-Module.define( 'src/async',[],function() {
+define( 'src/async',[],function() {
   var _self = this;
 
   var nextTick;
@@ -615,7 +671,7 @@ Module.define( 'src/async',[],function() {
  */
 
 
-Module.define('src/promise',[
+define('src/promise',[
   "src/async"
 ], function (Async) {
 
@@ -697,6 +753,7 @@ Module.define('src/promise',[
 
     target.always = always;
     target.done = done;
+    target.catch = fail;
     target.fail = fail;
     target.notify = notify;
     target.resolve = resolve;
@@ -706,6 +763,7 @@ Module.define('src/promise',[
     target.promise = {
       always: always,
       done: done,
+      catch: fail,
       fail: fail,
       notify: notify,
       then: then,
@@ -737,7 +795,7 @@ Module.define('src/promise',[
   /**
    * Create a promise that's already rejected
    */
-  Promise.rejected = function () {
+  Promise.reject = Promise.rejected = function () {
     return new Promise(null, {
       context: this,
       value: arguments,
@@ -748,7 +806,7 @@ Module.define('src/promise',[
   /**
    * Create a promise that's already resolved
    */
-  Promise.resolved = function () {
+  Promise.resolve = Promise.resolved = function () {
     return new Promise(null, {
       context: this,
       value: arguments,
@@ -946,7 +1004,7 @@ Module.define('src/promise',[
  */
 
 
-Module.define('src/when',[
+define('src/all',[
   "src/promise",
   "src/async"
 ], function(Promise, Async) {
@@ -959,19 +1017,17 @@ Module.define('src/when',[
     return input;
   }
 
-  /**
-  * Interface to allow multiple promises to be synchronized
-  */
-  function When() {
+  function All(values) {
+    values = values || [];
+
     // The input is the queue of items that need to be resolved.
-    var values      = arguments,
-        resolutions = [],
+    var resolutions = [],
         promise     = Promise.defer(),
         context     = this,
         remaining   = values.length;
 
     if (!values.length) {
-      return promise.resolve();
+      return promise.resolve(values);
     }
 
     // Check everytime a new resolved promise occurs if we are done processing all
@@ -979,7 +1035,7 @@ Module.define('src/when',[
     function checkPending() {
       remaining--;
       if (!remaining) {
-        promise.resolve.apply(context, resolutions);
+        promise.resolve.call(context, resolutions);
       }
     }
 
@@ -1010,6 +1066,37 @@ Module.define('src/when',[
     return promise;
   }
 
+  return All;
+});
+
+
+/**
+ * spromise Copyright (c) 2014 Miguel Castillo.
+ * Licensed under MIT
+ */
+
+
+define('src/when',[
+  "src/promise",
+  "src/all"
+], function(Promise, All) {
+
+
+  /**
+  * Interface to allow multiple promises to be synchronized
+  */
+  function When() {
+    var context = this, args = arguments;
+    return Promise(function(resolve, reject) {
+      All.call(context, args).then(function(results) {
+        resolve.apply(context, results);
+      },
+      function(reason) {
+        reject.call(context, reason);
+      });
+    });
+  }
+
   return When;
 });
 
@@ -1020,16 +1107,22 @@ Module.define('src/when',[
  */
 
 
-Module.define('src/spromise',[
+define('src/spromise',[
   "src/promise",
   "src/async",
-  "src/when"
-], function(promise, async, when) {
-  promise.when = when;
+  "src/when",
+  "src/all"
+], function(promise, async, when, all) {
   promise.async  = async;
+  promise.when = when;
+  promise.all = all;
   return promise;
 });
 
 
+})(Module.define);
+
+
 // Set default promise provider...
 Module.setPromiseProvider(Module.require("src/spromise"));
+
