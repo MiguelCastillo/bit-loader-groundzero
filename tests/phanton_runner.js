@@ -1,6 +1,6 @@
 var page    = require('webpage').create();
 var system  = require('system');
-var url     = "http://mcastillo_macbook/MortarJs/tests.html";
+var url     = "http://localhost:8000/tests/SpecRunner.html";
 
 page.onConsoleMessage = function (msg) {
   console.log(msg);
@@ -14,9 +14,7 @@ page.open(system.args[1] || url, function (status) {
   else {
     //Using a delay to make sure the JavaScript is executed in the browser
     window.setTimeout(function () {
-      page.render("output.png");
       phantom.exit();
-    }, 500);
+    }, 10000);
   }
 });
-

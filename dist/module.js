@@ -20,11 +20,9 @@ var Module = (function (root) {
   /**
    * target, [source]+
    */
-  function _extend() {
-    var sources = Array.prototype.slice.call(arguments),
-      target = sources.shift(),
-      source,
-      property;
+  function _extend(target) {
+    var sources = Array.prototype.slice.call(arguments, 1);
+    var source, property;
 
     for (source in sources) {
       source = sources[source];
@@ -291,7 +289,7 @@ var Module = (function (root) {
     }
   };
 
-  Module.adapters._main = function (name, deps, factory) {
+  Module.adapters.create = function (name, deps, factory) {
     return {
       cjs: [],
       name: name,
@@ -300,22 +298,10 @@ var Module = (function (root) {
     };
   };
 
-  Module.adapters["/string/object/function"] = function (name, deps, factory) {
-    return Module.adapters._main(name, deps, factory);
-  };
-
-  Module.adapters["/string/function/undefined"] = function (name, factory) {
-    return Module.adapters._main(name, [], factory);
-  };
-
-  Module.adapters["/object/function/undefined"] = function (deps, factory) {
-    return Module.adapters._main(undefined, deps, factory);
-  };
-
-  Module.adapters["/object/undefined/undefined"] = function (data) {
-    return Module.adapters._main(undefined, [], data);
-  };
-
+  Module.adapters["/string/object/function"]        = function (name, deps, factory) { return Module.adapters.create(name, deps, factory); };
+  Module.adapters["/string/function/undefined"]     = function (name, factory)       { return Module.adapters.create(name, [], factory); };
+  Module.adapters["/object/function/undefined"]     = function (deps, factory)       { return Module.adapters.create(undefined, deps, factory); };
+  Module.adapters["/object/undefined/undefined"]    = function (data)                { return Module.adapters.create(undefined, [], data); };
   Module.adapters["/string/object/undefined"]       = Module.adapters["/string/function/undefined"];
   Module.adapters["/function/undefined/undefined"]  = Module.adapters["/object/undefined/undefined"];
   Module.adapters["/string/undefined/undefined"]    = Module.adapters["/object/undefined/undefined"];
