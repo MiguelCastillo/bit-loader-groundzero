@@ -22,104 +22,6 @@
 (function() {
   "use strict";
 
-  function noop() {}
-
-  function isNull(item) {
-    return item === null || item === undefined;
-  }
-
-  function isArray(item) {
-    return item instanceof(Array);
-  }
-
-  function isObject(item) {
-    return typeof(item) === "object";
-  }
-
-  function isPlainObject(item) {
-    return !!(item && (item).toString() === "[object Object]");
-  }
-
-  function isFunction(item) {
-    return !isNull(item) && item.constructor === Function;
-  }
-
-  function isDate(item) {
-    return item instanceof(Date);
-  }
-
-  function result(input, args, context) {
-    if (isFunction(input) === "function") {
-      return input.apply(context, args||[]);
-    }
-    return input[args];
-  }
-
-  /**
-   * Copies all properties from sources into target
-   */
-  function extend(target) {
-    var source, length, i;
-    var sources = Array.prototype.slice.call(arguments, 1);
-    target = target || {};
-
-    // Allow n params to be passed in to extend this object
-    for (i = 0, length  = sources.length; i < length; i++) {
-      source = sources[i];
-      for (var property in source) {
-        if (source.hasOwnProperty(property)) {
-          target[property] = source[property];
-        }
-      }
-    }
-
-    return target;
-  }
-
-  /**
-   * Deep copy of all properties insrouces into target
-   */
-  function merge(target) {
-    var source, length, i;
-    var sources = Array.prototype.slice.call(arguments, 1);
-    target = target || {};
-
-    // Allow `n` params to be passed in to extend this object
-    for (i = 0, length  = sources.length; i < length; i++) {
-      source = sources[i];
-      for (var property in source) {
-        if (source.hasOwnProperty(property)) {
-          if (isPlainObject(source[property])) {
-            target[property] = merge(target[property], source[property]);
-          }
-          else {
-            target[property] = source[property];
-          }
-        }
-      }
-    }
-
-    return target;
-  }
-
-  module.exports = {
-    isNull: isNull,
-    isArray: isArray,
-    isObject: isObject,
-    isPlainObject: isPlainObject,
-    isFunction: isFunction,
-    isDate: isDate,
-    noop: noop,
-    result: result,
-    extend: extend,
-    merge: merge
-  };
-})(window || this);
-
-},{}],3:[function(require,module,exports){
-(function() {
-  "use strict";
-
   var Module   = require('./module'),
       Registry = require('./registry');
 
@@ -194,7 +96,7 @@
   module.exports = Define;
 })(window || this);
 
-},{"./module":9,"./registry":10}],4:[function(require,module,exports){
+},{"./module":8,"./registry":9}],3:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -268,7 +170,7 @@
   module.exports = Fetch;
 })(window || this);
 
-},{"./registry":10,"spromise":1}],5:[function(require,module,exports){
+},{"./registry":9,"spromise":1}],4:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -463,7 +365,7 @@
   module.exports = File;
 })(window || this);
 
-},{}],6:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -516,7 +418,7 @@
   module.exports = Import;
 })(window || this);
 
-},{"./registry":10,"spromise":1}],7:[function(require,module,exports){
+},{"./registry":9,"spromise":1}],6:[function(require,module,exports){
 (function(root) {
   "use strict";
 
@@ -601,7 +503,7 @@
   module.exports = Loader;
 })(window || this);
 
-},{"./fetchscript":4,"./file":5,"spromise":1}],8:[function(require,module,exports){
+},{"./fetchscript":3,"./file":4,"spromise":1}],7:[function(require,module,exports){
 (function (root) {
   "use strict";
 
@@ -685,7 +587,7 @@
   module.exports  = MLoader;
 })(window || this);
 
-},{"./define":3,"./file":5,"./import":6,"./loader":7,"./module":9,"./registry":10,"./require":11,"./resolver":12,"./utils":13,"spromise":1}],9:[function(require,module,exports){
+},{"./define":2,"./file":4,"./import":5,"./loader":6,"./module":8,"./registry":9,"./require":10,"./resolver":11,"./utils":12,"spromise":1}],8:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -721,7 +623,7 @@
   module.exports = Module;
 })(window || this);
 
-},{"./utils":13}],10:[function(require,module,exports){
+},{"./utils":12}],9:[function(require,module,exports){
 (function(root) {
   "use strict";
 
@@ -773,12 +675,12 @@
   module.exports = Registry;
 })(window || this);
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 (function() {
   "use script";
 
   var Registry = require('./registry'),
-      Utils    = require('./Utils');
+      Utils    = require('./utils');
 
   function Require(manager) {
     this.manager = manager;
@@ -800,7 +702,7 @@
   module.exports = Require;
 })(window || this);
 
-},{"./Utils":2,"./registry":10}],12:[function(require,module,exports){
+},{"./registry":9,"./utils":12}],11:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -830,7 +732,103 @@
   module.exports = Resolver;
 })(window || this);
 
-},{"./registry":10}],13:[function(require,module,exports){
-module.exports=require(2)
-},{"/Users/mcastillo/Projects/MLoader/src/Utils.js":2}]},{},[8])(8)
+},{"./registry":9}],12:[function(require,module,exports){
+(function() {
+  "use strict";
+
+  function noop() {}
+
+  function isNull(item) {
+    return item === null || item === undefined;
+  }
+
+  function isArray(item) {
+    return item instanceof(Array);
+  }
+
+  function isObject(item) {
+    return typeof(item) === "object";
+  }
+
+  function isPlainObject(item) {
+    return !!(item && (item).toString() === "[object Object]");
+  }
+
+  function isFunction(item) {
+    return !isNull(item) && item.constructor === Function;
+  }
+
+  function isDate(item) {
+    return item instanceof(Date);
+  }
+
+  function result(input, args, context) {
+    if (isFunction(input) === "function") {
+      return input.apply(context, args||[]);
+    }
+    return input[args];
+  }
+
+  /**
+   * Copies all properties from sources into target
+   */
+  function extend(target) {
+    var source, length, i;
+    var sources = Array.prototype.slice.call(arguments, 1);
+    target = target || {};
+
+    // Allow n params to be passed in to extend this object
+    for (i = 0, length  = sources.length; i < length; i++) {
+      source = sources[i];
+      for (var property in source) {
+        if (source.hasOwnProperty(property)) {
+          target[property] = source[property];
+        }
+      }
+    }
+
+    return target;
+  }
+
+  /**
+   * Deep copy of all properties insrouces into target
+   */
+  function merge(target) {
+    var source, length, i;
+    var sources = Array.prototype.slice.call(arguments, 1);
+    target = target || {};
+
+    // Allow `n` params to be passed in to extend this object
+    for (i = 0, length  = sources.length; i < length; i++) {
+      source = sources[i];
+      for (var property in source) {
+        if (source.hasOwnProperty(property)) {
+          if (isPlainObject(source[property])) {
+            target[property] = merge(target[property], source[property]);
+          }
+          else {
+            target[property] = source[property];
+          }
+        }
+      }
+    }
+
+    return target;
+  }
+
+  module.exports = {
+    isNull: isNull,
+    isArray: isArray,
+    isObject: isObject,
+    isPlainObject: isPlainObject,
+    isFunction: isFunction,
+    isDate: isDate,
+    noop: noop,
+    result: result,
+    extend: extend,
+    merge: merge
+  };
+})(window || this);
+
+},{}]},{},[7])(7)
 });

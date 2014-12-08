@@ -2,7 +2,7 @@
   "use script";
 
   var Registry = require('./registry'),
-      Utils    = require('./Utils');
+      Utils    = require('./utils');
 
   function Require(manager) {
     this.manager = manager;
