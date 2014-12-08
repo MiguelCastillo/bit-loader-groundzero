@@ -4,16 +4,16 @@
   "curly":true,
   "indent":2,
   "devel":true,
-  "laxcasebreak":true,
+  "browser": true,
   "globals":{
+    "module": true,
+    "exports": true,
     "require": true,
     "define": true,
     "$": true,
     "window": true,
     "_": true,
-    "describe": true,
-    "it": true,
-    "expect": true,
-    "beforeEach": true
+    "setTimeout": true,
+    "setInterval": true
   }
 }

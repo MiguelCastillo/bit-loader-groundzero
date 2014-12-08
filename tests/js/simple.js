@@ -1,4 +1,4 @@
-Module.define(function() {
+MLoader.define(function() {
   return {
     "init": function() {
       return "initialized!";

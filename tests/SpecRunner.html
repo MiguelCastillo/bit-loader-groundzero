@@ -2,20 +2,37 @@
 <html lang="en">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <title>MortarJs</title>
+    <title>MLoader Unit Tests</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Jamsine Runner">
+    <meta name="description" content="MLoader Unit Tests">
     <meta name="author" content="Miguel Castillo">
 
-    <link rel="shortcut icon" type="image/png" href="lib/jasmine-2.0.0/jasmine_favicon.png">
-    <link rel="stylesheet" type="text/css" href="lib/jasmine-2.0.0/jasmine.css">
 
-    <script src="lib/requirejs/require.js"></script>
+    <!-- polyfill function.bind - phantomjs does not current have it implemented  -->
+    <script type="text/javascript" src="bind.js"></script>
+
+    <!-- Load global MLoader for integration tests -->
+    <script type="text/javascript" src="../dist/mloader.js"></script>
+    <script>
+      MLoader.config = MLoader.configure;
+      var define     = MLoader.define;
+      var require    = MLoader.require;
+      var requirejs  = MLoader;
+    </script>
+
+    <!-- Load up mocha -->
+    <link rel="stylesheet" href="../node_modules/mocha/mocha.css"/>
+    <script type="text/javascript" src="../node_modules/mocha/mocha.js"></script>
+
+<!--    <script src="../node_modules/requirejs/require.js"></script>-->
     <script src="requirejs-config.js"></script>
   </head>
 
   <body>
-    <script>require(["SpecRunner"]);</script>
+    <div id="mocha"></div>
+    <script>
+      require(["tests/SpecRunner"]);
+    </script>
   </body>
 </html>
 

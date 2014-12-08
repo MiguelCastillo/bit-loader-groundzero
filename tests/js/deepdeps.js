@@ -1,4 +1,4 @@
-Module.define(["tests/js/deep1", "tests/js/deep2", "tests/js/deep3"], function(deep1, deep2, deep3) {
+MLoader.define(["tests/js/deep1", "tests/js/deep2", "tests/js/deep3"], function(deep1, deep2, deep3) {
   return {
     "one": deep1,
     "two": deep2,

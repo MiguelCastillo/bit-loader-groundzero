@@ -7,7 +7,7 @@ module.exports = function(grunt) {
     connect: {
       test: {
         options: {
-          port: 8000,
+          port: 8002,
           hostname: 'localhost'
         }
       },
@@ -18,10 +18,23 @@ module.exports = function(grunt) {
           keepalive: true
         }
       }
-
+    },
+    mocha: {
+      test: {
+        options: {
+          log: true,
+          logErrors: true,
+          reporter: "Spec",
+          run: false,
+          timeout: 10000,
+          urls: ["http://localhost:8002/tests/SpecRunner.html"]
+        }
+      }
     }
   });
 
+  grunt.loadNpmTasks("grunt-mocha");
   grunt.loadNpmTasks("grunt-contrib-connect");
-  grunt.registerTask("default", ["connect:keepalive"]);
+  grunt.registerTask("server", ["connect:keepalive"]);
+  grunt.registerTask("test", ["connect:test", "mocha:test"]);
 };

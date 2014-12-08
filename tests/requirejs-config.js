@@ -1,15 +1,13 @@
-// Configure requirejs all the tests are going to get their resources from
-require.config({
+requirejs.config({
+  "baseUrl": "../",
   "paths": {
-    "dist": "../dist",
-    "src": "../src",
-    "underscore": "lib/underscore/underscore",
-    "jquery": "lib/jquery/dist/jquery",
-    "rjasmine": "lib/rjasmine/dist/rjasmine-debug"
+    "mocha": "../node_modules/mocha/mocha",
+    "chai": "../node_modules/chai/chai"
   },
   "shim": {
-    "dist/module": {
-      "exports": "Module"
+    "mocha": {
+      "exports": "mocha"
     }
-  }
+  },
+  "urlArgs": 'bust=' + (new Date()).getTime()
 });

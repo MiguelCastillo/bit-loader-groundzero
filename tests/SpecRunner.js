@@ -1,22 +1,20 @@
-// Load up rjasmine
-define(["rjasmine"], function (RJasmine) {
-  // Create instance of jasmine
-  var rjasmine = new RJasmine({
-    reporters: {
-      console: true,
-      html: true
-    }
-  });
+define([
+  "chai"
+], function(chai) {
 
-  // Make api global and jasmine itself so that reporters can have an easy
-  // way to register themeselves
-  RJasmine.extend(window, rjasmine.api);
-  window.jasmine = RJasmine.jasmine;
+  window.chai   = chai;
+  window.expect = chai.expect;
+  window.assert = chai.assert;
 
-  rjasmine.ready(function() {
-    require([
-      "specs/module",
-      "specs/file"
-    ], rjasmine.execute);
-  });
+  mocha.setup("bdd");
+
+  require([
+    "tests/specs/file",
+    "tests/specs/utils",
+    "tests/specs/module",
+    "tests/specs/import",
+    "tests/specs/registry",
+    "tests/specs/loader",
+    "tests/specs/mloader"
+  ], mocha.run);
 });
