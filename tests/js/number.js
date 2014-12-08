@@ -1,1 +1,1 @@
-Module.define(3.14);
+MLoader.define(3.14);

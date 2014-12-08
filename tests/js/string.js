@@ -1,1 +1,1 @@
-Module.define("Just some string value");
+MLoader.define("Just some string value");

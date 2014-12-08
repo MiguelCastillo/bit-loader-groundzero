@@ -1,4 +1,4 @@
-Module.define(["tests/js/simple"], function(simple) {
+MLoader.define(["tests/js/simple"], function(simple) {
   return {
     "onedependency": simple
   };
