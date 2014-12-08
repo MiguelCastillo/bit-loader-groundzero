@@ -1,9 +1,9 @@
 define(["dist/mloader"], function(MLoader) {
 
-  describe("Loader Suite", function() {
-    var loader;
+  describe("Resolver Suite", function() {
+    var resolver;
     beforeEach(function() {
-      loader = MLoader.Loader({
+      resolver = MLoader.Resolver({
         "settings": {
           "packages": [
             "pacakge1", {
@@ -25,7 +25,7 @@ define(["dist/mloader"], function(MLoader) {
     describe("When processing package 'pacakge1'", function() {
       var mod;
       beforeEach(function() {
-        mod = loader.getModuleMeta("pacakge1");
+        mod = resolver.resolve("pacakge1");
       });
 
       it("then package is 'pacakge1/main.js'", function() {
@@ -37,7 +37,7 @@ define(["dist/mloader"], function(MLoader) {
     describe("When processing package 'package2'", function() {
       var mod;
       beforeEach(function() {
-        mod = loader.getModuleMeta("package2");
+        mod = resolver.resolve("package2");
       });
 
       it("then package is 'package2/main.js'", function() {
@@ -49,7 +49,7 @@ define(["dist/mloader"], function(MLoader) {
     describe("When processing package 'lib'", function() {
       var mod;
       beforeEach(function() {
-        mod = loader.getModuleMeta("lib");
+        mod = resolver.resolve("lib");
       });
 
       it("then package is 'good/tests/lib/main.js'", function() {
@@ -61,7 +61,7 @@ define(["dist/mloader"], function(MLoader) {
     describe("When processing package 'js'", function() {
       var mod;
       beforeEach(function() {
-        mod = loader.getModuleMeta("js");
+        mod = resolver.resolve("js");
       });
 
       it("then package is 'good/tests/js/index.js'", function() {

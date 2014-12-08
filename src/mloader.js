@@ -1,26 +1,30 @@
 (function (root) {
   "use strict";
 
-  var File     = require('./file'),
-      Utils    = require('./utils'),
-      Loader   = require('./loader'),
-      Module   = require('./module'),
-      Define   = require('./define'),
-      Import   = require('./import'),
-      Require  = require('./require'),
-      Resolver = require('./resolver'),
-      Registry = require('./registry'),
-      Promise  = require('spromise');
+  var File           = require('./file'),
+      Utils          = require('./utils'),
+      Loader         = require('./loader'),
+      Module         = require('./module'),
+      Define         = require('./define'),
+      Import         = require('./import'),
+      Require        = require('./require'),
+      Resolver       = require('./resolver'),
+      Registry       = require('./registry'),
+      Fetch          = require('./fetchscript'),
+      Transformation = require('./transformation'),
+      Promise        = require('spromise');
 
   function MLoader(options) {
     this.settings = Utils.extend({}, MLoader.defaults, options);
     this.context  = Registry.getById();
 
-    this._loader   = new Loader(this);
-    this._resolver = new Resolver(this);
-    this._import   = new Import(this);
-    this._require  = new Require(this);
-    this._define   = new Define(this);
+    this._fetch          = Fetch;
+    this._loader         = new Loader(this);
+    this._resolver       = new Resolver(this);
+    this._import         = new Import(this);
+    this._require        = new Require(this);
+    this._define         = new Define(this);
+    this._transformation = new Transformation(this);
 
     // Expose interfaces
     this.define  = this._define.define.bind(this._define);

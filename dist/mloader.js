@@ -419,43 +419,32 @@
 })(window || this);
 
 },{"./registry":9,"spromise":1}],6:[function(require,module,exports){
-(function(root) {
+(function() {
   "use strict";
 
-  var Promise      = require('spromise'),
-      File         = require('./file'),
-      scriptLoader = require('./fetchscript');
+  var Promise  = require('spromise'),
+      Registry = require('./registry');
 
   function Loader(manager) {
     this.manager = manager;
-    this.fetch   = scriptLoader;
+    this.context = (manager && manager.context) || Registry.getById();
   }
 
   Loader.prototype.load = function(name) {
-    var manager = this.manager;
+    var manager = this.manager,
+        context = this.context;
 
     if (!name) {
       throw new TypeError("Must provide the name of the module to load");
     }
 
-    if (!manager.context.loaded[name]) {
-      manager.context.loaded[name] = this.fetch(this.getModuleMeta(name))
-        .then(function(result) {
-          // Copy modules over to the loaded bucket if it does not exist. Anything
-          // that has already been loaded will get ignored.
-          var modules = result.modules;
-          for (var item in modules) {
-            if (modules.hasOwnProperty(item) && !manager.context.loaded.hasOwnProperty(item)) {
-              manager.context.loaded[name] = result.modules[item];
-            }
-          }
-
-          manager.context.loaded[name] = result.modules[name];
-          return manager.resolve(result.modules[name]);
-        });
+    if (!context.hasOwnProperty(name)) {
+      context.loaded[name] = this.fetch(name).then(function(_module) {
+        return manager._transformation.transform(_module);
+      });
     }
 
-    return Promise.when(manager.context.loaded[name])
+    return Promise.when(context.loaded[name])
       .then(function(_module) {
         return _module.code;
       }, function(error) {
@@ -463,70 +452,73 @@
       });
   };
 
-  Loader.prototype.getModuleMeta = function(name) {
-    var i, length, pkg, shimName;
-    var manager  = this.manager,
-        context  = manager.context,
-        settings = manager.settings,
-        packages = settings.packages,
-        fileName = (settings.paths && settings.paths[name]) || name;
 
-    // Go through the packages and figure if the module is actually configured as such.
-    for (i = 0, length = packages.length; i < length; i++) {
-      pkg = packages[i] || '';
-      if (pkg.name === name || pkg === name) {
-        if (pkg.location) {
-          fileName = pkg.location + "/" +  name + "/" + (pkg.main || "main");
+  Loader.prototype.fetch = function(name) {
+    var manager = this.manager,
+        context = this.context;
+
+    return manager._fetch(manager.resolve(name))
+      .then(function(result) {
+        // Copy modules over to the loaded bucket if it does not exist. Anything
+        // that has already been loaded will get ignored.
+        var modules = result.modules;
+        for (var item in modules) {
+          if (modules.hasOwnProperty(item) && !context.loaded.hasOwnProperty(item)) {
+            context.loaded[name] = result.modules[item];
+          }
         }
-        else {
-          fileName = name + "/" + (pkg.main || "main");
+
+        // Save to variable for easier reading
+        var _module = (context.loaded[name] = result.modules[name]);
+
+        if (_module.hasOwnProperty("code")) {
+          return _module;
         }
-        break;
-      }
-    }
 
-    // Once the module has been fully resolved, we finally added to the list of available modules
-    if (settings.shim && settings.shim.hasOwnProperty(name)) {
-      shimName = settings.shim[name].exports || name;
-      if (root.hasOwnProperty(name)) {
-        context.modules[name] = root[name];
-      }
-    }
+        if (!_module.deps.length) {
+          _module.code = _module.factory();
+          return _module;
+        }
 
-    return {
-      name: name,
-      file: new File(fileName, settings.baseUrl),
-      urlArgs: settings.urlArgs
-    };
+        return manager.import(_module.deps).then(function() {
+          _module.code = _module.factory.apply(_module, arguments);
+          return _module;
+        });
+      });
   };
+
 
   module.exports = Loader;
 })(window || this);
 
-},{"./fetchscript":3,"./file":4,"spromise":1}],7:[function(require,module,exports){
+},{"./registry":9,"spromise":1}],7:[function(require,module,exports){
 (function (root) {
   "use strict";
 
-  var File     = require('./file'),
-      Utils    = require('./utils'),
-      Loader   = require('./loader'),
-      Module   = require('./module'),
-      Define   = require('./define'),
-      Import   = require('./import'),
-      Require  = require('./require'),
-      Resolver = require('./resolver'),
-      Registry = require('./registry'),
-      Promise  = require('spromise');
+  var File           = require('./file'),
+      Utils          = require('./utils'),
+      Loader         = require('./loader'),
+      Module         = require('./module'),
+      Define         = require('./define'),
+      Import         = require('./import'),
+      Require        = require('./require'),
+      Resolver       = require('./resolver'),
+      Registry       = require('./registry'),
+      Fetch          = require('./fetchscript'),
+      Transformation = require('./transformation'),
+      Promise        = require('spromise');
 
   function MLoader(options) {
     this.settings = Utils.extend({}, MLoader.defaults, options);
     this.context  = Registry.getById();
 
-    this._loader   = new Loader(this);
-    this._resolver = new Resolver(this);
-    this._import   = new Import(this);
-    this._require  = new Require(this);
-    this._define   = new Define(this);
+    this._fetch          = Fetch;
+    this._loader         = new Loader(this);
+    this._resolver       = new Resolver(this);
+    this._import         = new Import(this);
+    this._require        = new Require(this);
+    this._define         = new Define(this);
+    this._transformation = new Transformation(this);
 
     // Expose interfaces
     this.define  = this._define.define.bind(this._define);
@@ -587,7 +579,7 @@
   module.exports  = MLoader;
 })(window || this);
 
-},{"./define":2,"./file":4,"./import":5,"./loader":6,"./module":8,"./registry":9,"./require":10,"./resolver":11,"./utils":12,"spromise":1}],8:[function(require,module,exports){
+},{"./define":2,"./fetchscript":3,"./file":4,"./import":5,"./loader":6,"./module":8,"./registry":9,"./require":10,"./resolver":11,"./transformation":12,"./utils":13,"spromise":1}],8:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -623,7 +615,7 @@
   module.exports = Module;
 })(window || this);
 
-},{"./utils":12}],9:[function(require,module,exports){
+},{"./utils":13}],9:[function(require,module,exports){
 (function(root) {
   "use strict";
 
@@ -702,37 +694,74 @@
   module.exports = Require;
 })(window || this);
 
-},{"./registry":9,"./utils":12}],11:[function(require,module,exports){
-(function() {
+},{"./registry":9,"./utils":13}],11:[function(require,module,exports){
+(function(root) {
   "use strict";
 
-  var Registry = require('./registry');
+  var Registry = require('./registry'),
+      File     = require('./file');
 
   function Resolver(manager) {
     this.manager = manager;
     this.context = (manager && manager.context) ? manager.context : Registry.getById();
   }
 
-  Resolver.prototype.resolve = function(_module) {
-    if (_module.hasOwnProperty("code")) {
-      return _module;
+  Resolver.prototype.resolve = function(name) {
+    var i, length, pkg, shimName;
+    var manager  = this.manager,
+        context  = this.context,
+        settings = manager.settings,
+        packages = settings.packages,
+        fileName = (settings.paths && settings.paths[name]) || name;
+
+    // Go through the packages and figure if the module is actually configured as such.
+    for (i = 0, length = packages.length; i < length; i++) {
+      pkg = packages[i] || '';
+      if (pkg.name === name || pkg === name) {
+        if (pkg.location) {
+          fileName = pkg.location + "/" +  name + "/" + (pkg.main || "main");
+        }
+        else {
+          fileName = name + "/" + (pkg.main || "main");
+        }
+        break;
+      }
     }
 
-    if (!_module.deps.length) {
-      _module.code = _module.factory();
-      return _module;
+    // Once the module has been fully resolved, we finally added to the list of available modules
+    if (settings.shim && settings.shim.hasOwnProperty(name)) {
+      shimName = settings.shim[name].exports || name;
+      if (root.hasOwnProperty(name)) {
+        context.modules[name] = root[name];
+      }
     }
 
-    return this.manager.import(_module.deps).then(function() {
-      _module.code = _module.factory.apply(_module, arguments);
-      return _module;
-    });
+    return {
+      name: name,
+      file: new File(fileName, settings.baseUrl),
+      urlArgs: settings.urlArgs
+    };
   };
 
   module.exports = Resolver;
 })(window || this);
 
-},{"./registry":9}],12:[function(require,module,exports){
+},{"./file":4,"./registry":9}],12:[function(require,module,exports){
+(function() {
+  "use strict";
+
+  function Transformation(manager) {
+    this.manager = manager;
+  }
+
+  Transformation.prototype.transform = function(_module) {
+    return _module;
+  };
+
+  module.exports = Transformation;
+})(window || this);
+
+},{}],13:[function(require,module,exports){
 (function() {
   "use strict";
 

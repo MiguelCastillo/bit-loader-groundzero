@@ -14,7 +14,7 @@ define([
     "tests/specs/module",
     "tests/specs/import",
     "tests/specs/registry",
-    "tests/specs/loader",
+    "tests/specs/resolver",
     "tests/specs/mloader"
   ], mocha.run);
 });
