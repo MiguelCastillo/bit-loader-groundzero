@@ -31,4 +31,4 @@
 
   Module.Type = Type;
   module.exports = Module;
-})(window || this);
+})();

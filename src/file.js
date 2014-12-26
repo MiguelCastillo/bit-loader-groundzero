@@ -1,8 +1,6 @@
 (function() {
   "use strict";
 
-  /**
-   */
   function File (fileUri, baseUri) {
     var fileName, mergedPath;
     baseUri = baseUri || "";
@@ -23,8 +21,6 @@
     this.path     = fileName.path;
   }
 
-  /**
-   */
   File.prototype.toUrl = function (extension) {
     var file = this;
     return (file.protocol || "") + (file.path || "") + file.name + (extension || ".js");
@@ -190,4 +186,4 @@
   };
 
   module.exports = File;
-})(window || this);
+})();

@@ -15,8 +15,8 @@
    * come through here, named and anonymous.
    */
   Define.prototype.define = function () {
-    var _module = Define.adapters.apply({}, arguments);
-    var context = Registry.getGlobalModule();
+    var _module = Define.adapters.apply({}, arguments),
+        context = Registry.getGlobalModule();
 
     if (_module.name) {
       // Do no allow modules to override other modules...
@@ -73,4 +73,4 @@
   Define.adapters["/undefined/undefined/undefined"] = Define.adapters["/object/undefined/undefined"];
 
   module.exports = Define;
-})(window || this);
+})();

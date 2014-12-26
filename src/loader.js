@@ -10,62 +10,61 @@
   }
 
   Loader.prototype.load = function(name) {
-    var manager = this.manager,
+    var loader  = this,
+        manager = this.manager,
         context = this.context;
 
     if (!name) {
       throw new TypeError("Must provide the name of the module to load");
     }
 
-    if (!context.hasOwnProperty(name)) {
-      context.loaded[name] = this.fetch(name).then(function(_module) {
-        return manager._transformation.transform(_module);
-      });
+    if (!context.loaded.hasOwnProperty(name)) {
+      context.loaded[name] = manager
+        .fetch(manager.resolve(name))
+        .then(function(result) {
+          // Copy modules over to the loaded bucket if it does not exist. Anything
+          // that has already been loaded will get ignored.
+          var modules = result.modules;
+          for (var item in modules) {
+            if (modules.hasOwnProperty(item) && !context.loaded.hasOwnProperty(item)) {
+              context.loaded[name] = result.modules[item];
+            }
+          }
+
+          return (context.loaded[name] = result.modules[name]);
+        }, function(err) {return err;});
     }
 
-    return Promise.when(context.loaded[name])
-      .then(function(_module) {
-        return _module.code;
-      }, function(error) {
-        return error;
-      });
+    return Promise
+      .resolve(context.loaded[name])
+      .then(function(mod) {
+        // If the module has a property `code` that means the module has already
+        // been fully resolved.
+        if (mod.hasOwnProperty("code")) {
+          return mod;
+        }
+
+        return loader.finalize(mod);
+      }, function(err) {return err;});
   };
 
+  Loader.prototype.finalize = function(mod) {
+    var manager = this.manager;
 
-  Loader.prototype.fetch = function(name) {
-    var manager = this.manager,
-        context = this.context;
+    if (!mod.deps.length) {
+      mod.code = mod.factory();
+      manager.providers.transformation.transform(mod);
+      return mod;
+    }
 
-    return manager._fetch(manager.resolve(name))
-      .then(function(result) {
-        // Copy modules over to the loaded bucket if it does not exist. Anything
-        // that has already been loaded will get ignored.
-        var modules = result.modules;
-        for (var item in modules) {
-          if (modules.hasOwnProperty(item) && !context.loaded.hasOwnProperty(item)) {
-            context.loaded[name] = result.modules[item];
-          }
-        }
-
-        // Save to variable for easier reading
-        var _module = (context.loaded[name] = result.modules[name]);
-
-        if (_module.hasOwnProperty("code")) {
-          return _module;
-        }
-
-        if (!_module.deps.length) {
-          _module.code = _module.factory();
-          return _module;
-        }
-
-        return manager.import(_module.deps).then(function() {
-          _module.code = _module.factory.apply(_module, arguments);
-          return _module;
-        });
-      });
+    return manager
+      .import(mod.deps)
+      .then(function() {
+        mod.code = mod.factory.apply(mod, arguments);
+        manager.providers.transformation.transform(mod);
+        return mod;
+      }, function(err) {return err;});
   };
-
 
   module.exports = Loader;
-})(window || this);
+})();

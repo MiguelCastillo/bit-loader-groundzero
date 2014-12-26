@@ -93,4 +93,4 @@
     extend: extend,
     merge: merge
   };
-})(window || this);
+})();

@@ -5,9 +5,9 @@
     this.manager = manager;
   }
 
-  Transformation.prototype.transform = function(_module) {
-    return _module;
+  Transformation.prototype.transform = function(mod) {
+    return mod;
   };
 
   module.exports = Transformation;
-})(window || this);
+})();

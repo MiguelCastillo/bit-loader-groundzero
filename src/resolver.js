@@ -14,26 +14,30 @@
     var manager  = this.manager,
         context  = this.context,
         settings = manager.settings,
+        shim     = settings.shim,
         packages = settings.packages,
-        fileName = (settings.paths && settings.paths[name]) || name;
+        fileName = "";
 
     // Go through the packages and figure if the module is actually configured as such.
     for (i = 0, length = packages.length; i < length; i++) {
       pkg = packages[i] || '';
       if (pkg.name === name || pkg === name) {
         if (pkg.location) {
-          fileName = pkg.location + "/" +  name + "/" + (pkg.main || "main");
+          fileName = pkg.location + "/";
         }
-        else {
-          fileName = name + "/" + (pkg.main || "main");
-        }
+
+        fileName += name + "/" + (pkg.main || "main");
         break;
       }
     }
+    
+    if (!fileName) {
+      fileName = (settings.paths && settings.paths[name]) || name;
+    }
 
     // Once the module has been fully resolved, we finally added to the list of available modules
-    if (settings.shim && settings.shim.hasOwnProperty(name)) {
-      shimName = settings.shim[name].exports || name;
+    if (shim && shim.hasOwnProperty(name)) {
+      shimName = shim[name].exports || name;
       if (root.hasOwnProperty(name)) {
         context.modules[name] = root[name];
       }
@@ -47,4 +51,4 @@
   };
 
   module.exports = Resolver;
-})(window || this);
+})(typeof(window) !== 'undefined' ? window : this);

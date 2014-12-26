@@ -28,7 +28,7 @@
     "grunt-mocha": "~0.4.11",
     "chai": "~1.10.0",
     "requirejs": "~2.1.15",
-    "spromise": "~0.7.2",
+    "spromise": "",
     "browserify": "~6.3.3"
   }
 }

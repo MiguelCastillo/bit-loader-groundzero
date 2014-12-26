@@ -4,7 +4,6 @@
   var File           = require('./file'),
       Utils          = require('./utils'),
       Loader         = require('./loader'),
-      Module         = require('./module'),
       Define         = require('./define'),
       Import         = require('./import'),
       Require        = require('./require'),
@@ -18,20 +17,23 @@
     this.settings = Utils.extend({}, MLoader.defaults, options);
     this.context  = Registry.getById();
 
-    this._fetch          = Fetch;
-    this._loader         = new Loader(this);
-    this._resolver       = new Resolver(this);
-    this._import         = new Import(this);
-    this._require        = new Require(this);
-    this._define         = new Define(this);
-    this._transformation = new Transformation(this);
+    var providers = {
+      loader         : MLoader.Loader(this),
+      resolver       : MLoader.Resolver(this),
+      import         : MLoader.Import(this),
+      require        : MLoader.Require(this),
+      define         : MLoader.Define(this),
+      transformation : MLoader.Transformation(this)
+    };
 
     // Expose interfaces
-    this.define  = this._define.define.bind(this._define);
-    this.load    = this._loader.load.bind(this._loader);
-    this.resolve = this._resolver.resolve.bind(this._resolver);
-    this.import  = this._import.import.bind(this._import);
-    this.require = this._require.require.bind(this._require);
+    this.fetch     = Fetch;
+    this.providers = providers;
+    this.define    = providers.define.define.bind(providers.define);
+    this.load      = providers.loader.load.bind(providers.loader);
+    this.resolve   = providers.resolver.resolve.bind(providers.resolver);
+    this.import    = providers.import.import.bind(providers.import);
+    this.require   = providers.require.require.bind(providers.require);
   }
 
   MLoader.prototype.clear = function() {
@@ -58,15 +60,16 @@
   };
 
   // Expose constructors and utilities
-  MLoader.File     = File;
-  MLoader.Utils    = Utils;
-  MLoader.Promise  = Promise;
-  MLoader.Registry = Registry;
-  MLoader.Loader   = factory(Loader);
-  MLoader.Import   = factory(Import);
-  MLoader.Module   = factory(Module);
-  MLoader.Define   = factory(Define);
-  MLoader.Resolver = factory(Resolver);
+  MLoader.File           = File;
+  MLoader.Utils          = Utils;
+  MLoader.Promise        = Promise;
+  MLoader.Registry       = Registry;
+  MLoader.Loader         = factory(Loader);
+  MLoader.Resolver       = factory(Resolver);
+  MLoader.Import         = factory(Import);
+  MLoader.Require        = factory(Require);
+  MLoader.Define         = factory(Define);
+  MLoader.Transformation = factory(Transformation);
 
   function factory(Constructor) {
     return function(context) {
@@ -83,4 +86,4 @@
   mloader.define.amd = {};
 
   module.exports  = MLoader;
-})(window || this);
+})(typeof(window) !== 'undefined' ? window : this);

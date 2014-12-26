@@ -36,8 +36,8 @@
    * come through here, named and anonymous.
    */
   Define.prototype.define = function () {
-    var _module = Define.adapters.apply({}, arguments);
-    var context = Registry.getGlobalModule();
+    var _module = Define.adapters.apply({}, arguments),
+        context = Registry.getGlobalModule();
 
     if (_module.name) {
       // Do no allow modules to override other modules...
@@ -94,7 +94,7 @@
   Define.adapters["/undefined/undefined/undefined"] = Define.adapters["/object/undefined/undefined"];
 
   module.exports = Define;
-})(window || this);
+})();
 
 },{"./module":8,"./registry":9}],3:[function(require,module,exports){
 (function() {
@@ -168,14 +168,12 @@
   }
 
   module.exports = Fetch;
-})(window || this);
+})();
 
 },{"./registry":9,"spromise":1}],4:[function(require,module,exports){
 (function() {
   "use strict";
 
-  /**
-   */
   function File (fileUri, baseUri) {
     var fileName, mergedPath;
     baseUri = baseUri || "";
@@ -196,8 +194,6 @@
     this.path     = fileName.path;
   }
 
-  /**
-   */
   File.prototype.toUrl = function (extension) {
     var file = this;
     return (file.protocol || "") + (file.path || "") + file.name + (extension || ".js");
@@ -363,7 +359,7 @@
   };
 
   module.exports = File;
-})(window || this);
+})();
 
 },{}],5:[function(require,module,exports){
 (function() {
@@ -378,9 +374,9 @@
   }
 
   Import.prototype.import = function(names, options) {
-    var manager  = this.manager,
-        context  = this.context,
-        deps     = [];
+    options = options || {};
+    var manager = this.manager,
+        context = this.context;
 
     // Coerce string to array to simplify input processing
     if (typeof(names) === "string") {
@@ -389,25 +385,19 @@
 
     // This logic figures out if the module's dependencies need to be resolved and if
     // they also need to be downloaded.
-    deps = names.map(function(name) {
-      var modules;
-      if (options && options.modules && options.modules.hasOwnProperty(name)) {
-        modules = options.modules;
+    var deps = names.map(function(name) {
+      if (options.modules && options.modules.hasOwnProperty(name)) {
+        return options.modules[name];
       }
-      else {
-        modules = context.modules;
+      else if (context.modules.hasOwnProperty(name)) {
+        return context.modules[name];
       }
 
       // If the module is not already loaded, then load it.
-      if (!modules.hasOwnProperty(name)) {
-        return (modules[name] = manager.load(name)
-          .then(function(result) {
-            return (modules[name] = result);
-          }));
-      }
-      else {
-        return modules[name];
-      }
+      return (context.modules[name] = manager.load(name)
+        .then(function(result) {
+          return (context.modules[name] = result.code);
+        }));
     });
 
     return Promise.when.apply((void 0), deps).fail(function(error) {
@@ -416,7 +406,7 @@
   };
 
   module.exports = Import;
-})(window || this);
+})();
 
 },{"./registry":9,"spromise":1}],6:[function(require,module,exports){
 (function() {
@@ -431,65 +421,64 @@
   }
 
   Loader.prototype.load = function(name) {
-    var manager = this.manager,
+    var loader  = this,
+        manager = this.manager,
         context = this.context;
 
     if (!name) {
       throw new TypeError("Must provide the name of the module to load");
     }
 
-    if (!context.hasOwnProperty(name)) {
-      context.loaded[name] = this.fetch(name).then(function(_module) {
-        return manager._transformation.transform(_module);
-      });
+    if (!context.loaded.hasOwnProperty(name)) {
+      context.loaded[name] = manager
+        .fetch(manager.resolve(name))
+        .then(function(result) {
+          // Copy modules over to the loaded bucket if it does not exist. Anything
+          // that has already been loaded will get ignored.
+          var modules = result.modules;
+          for (var item in modules) {
+            if (modules.hasOwnProperty(item) && !context.loaded.hasOwnProperty(item)) {
+              context.loaded[name] = result.modules[item];
+            }
+          }
+
+          return (context.loaded[name] = result.modules[name]);
+        }, function(err) {return err;});
     }
 
-    return Promise.when(context.loaded[name])
-      .then(function(_module) {
-        return _module.code;
-      }, function(error) {
-        return error;
-      });
+    return Promise
+      .resolve(context.loaded[name])
+      .then(function(mod) {
+        // If the module has a property `code` that means the module has already
+        // been fully resolved.
+        if (mod.hasOwnProperty("code")) {
+          return mod;
+        }
+
+        return loader.finalize(mod);
+      }, function(err) {return err;});
   };
 
+  Loader.prototype.finalize = function(mod) {
+    var manager = this.manager;
 
-  Loader.prototype.fetch = function(name) {
-    var manager = this.manager,
-        context = this.context;
+    if (!mod.deps.length) {
+      mod.code = mod.factory();
+      manager.providers.transformation.transform(mod);
+      return mod;
+    }
 
-    return manager._fetch(manager.resolve(name))
-      .then(function(result) {
-        // Copy modules over to the loaded bucket if it does not exist. Anything
-        // that has already been loaded will get ignored.
-        var modules = result.modules;
-        for (var item in modules) {
-          if (modules.hasOwnProperty(item) && !context.loaded.hasOwnProperty(item)) {
-            context.loaded[name] = result.modules[item];
-          }
-        }
-
-        // Save to variable for easier reading
-        var _module = (context.loaded[name] = result.modules[name]);
-
-        if (_module.hasOwnProperty("code")) {
-          return _module;
-        }
-
-        if (!_module.deps.length) {
-          _module.code = _module.factory();
-          return _module;
-        }
-
-        return manager.import(_module.deps).then(function() {
-          _module.code = _module.factory.apply(_module, arguments);
-          return _module;
-        });
-      });
+    return manager
+      .import(mod.deps)
+      .then(function() {
+        mod.code = mod.factory.apply(mod, arguments);
+        manager.providers.transformation.transform(mod);
+        return mod;
+      }, function(err) {return err;});
   };
-
 
   module.exports = Loader;
-})(window || this);
+})();
 
 },{"./registry":9,"spromise":1}],7:[function(require,module,exports){
 (function (root) {
@@ -498,7 +487,6 @@
   var File           = require('./file'),
       Utils          = require('./utils'),
       Loader         = require('./loader'),
-      Module         = require('./module'),
       Define         = require('./define'),
       Import         = require('./import'),
       Require        = require('./require'),
@@ -512,20 +500,23 @@
     this.settings = Utils.extend({}, MLoader.defaults, options);
     this.context  = Registry.getById();
 
-    this._fetch          = Fetch;
-    this._loader         = new Loader(this);
-    this._resolver       = new Resolver(this);
-    this._import         = new Import(this);
-    this._require        = new Require(this);
-    this._define         = new Define(this);
-    this._transformation = new Transformation(this);
+    var providers = {
+      loader         : MLoader.Loader(this),
+      resolver       : MLoader.Resolver(this),
+      import         : MLoader.Import(this),
+      require        : MLoader.Require(this),
+      define         : MLoader.Define(this),
+      transformation : MLoader.Transformation(this)
+    };
 
     // Expose interfaces
-    this.define  = this._define.define.bind(this._define);
-    this.load    = this._loader.load.bind(this._loader);
-    this.resolve = this._resolver.resolve.bind(this._resolver);
-    this.import  = this._import.import.bind(this._import);
-    this.require = this._require.require.bind(this._require);
+    this.fetch     = Fetch;
+    this.providers = providers;
+    this.define    = providers.define.define.bind(providers.define);
+    this.load      = providers.loader.load.bind(providers.loader);
+    this.resolve   = providers.resolver.resolve.bind(providers.resolver);
+    this.import    = providers.import.import.bind(providers.import);
+    this.require   = providers.require.require.bind(providers.require);
   }
 
   MLoader.prototype.clear = function() {
@@ -552,15 +543,16 @@
   };
 
   // Expose constructors and utilities
-  MLoader.File     = File;
-  MLoader.Utils    = Utils;
-  MLoader.Promise  = Promise;
-  MLoader.Registry = Registry;
-  MLoader.Loader   = factory(Loader);
-  MLoader.Import   = factory(Import);
-  MLoader.Module   = factory(Module);
-  MLoader.Define   = factory(Define);
-  MLoader.Resolver = factory(Resolver);
+  MLoader.File           = File;
+  MLoader.Utils          = Utils;
+  MLoader.Promise        = Promise;
+  MLoader.Registry       = Registry;
+  MLoader.Loader         = factory(Loader);
+  MLoader.Resolver       = factory(Resolver);
+  MLoader.Import         = factory(Import);
+  MLoader.Require        = factory(Require);
+  MLoader.Define         = factory(Define);
+  MLoader.Transformation = factory(Transformation);
 
   function factory(Constructor) {
     return function(context) {
@@ -577,9 +569,9 @@
   mloader.define.amd = {};
 
   module.exports  = MLoader;
-})(window || this);
+})(typeof(window) !== 'undefined' ? window : this);
 
-},{"./define":2,"./fetchscript":3,"./file":4,"./import":5,"./loader":6,"./module":8,"./registry":9,"./require":10,"./resolver":11,"./transformation":12,"./utils":13,"spromise":1}],8:[function(require,module,exports){
+},{"./define":2,"./fetchscript":3,"./file":4,"./import":5,"./loader":6,"./registry":9,"./require":10,"./resolver":11,"./transformation":12,"./utils":13,"spromise":1}],8:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -613,7 +605,7 @@
 
   Module.Type = Type;
   module.exports = Module;
-})(window || this);
+})();
 
 },{"./utils":13}],9:[function(require,module,exports){
 (function(root) {
@@ -692,7 +684,7 @@
   };
 
   module.exports = Require;
-})(window || this);
+})();
 
 },{"./registry":9,"./utils":13}],11:[function(require,module,exports){
 (function(root) {
@@ -711,26 +703,30 @@
     var manager  = this.manager,
         context  = this.context,
         settings = manager.settings,
+        shim     = settings.shim,
         packages = settings.packages,
-        fileName = (settings.paths && settings.paths[name]) || name;
+        fileName = "";
 
     // Go through the packages and figure if the module is actually configured as such.
     for (i = 0, length = packages.length; i < length; i++) {
       pkg = packages[i] || '';
       if (pkg.name === name || pkg === name) {
         if (pkg.location) {
-          fileName = pkg.location + "/" +  name + "/" + (pkg.main || "main");
+          fileName = pkg.location + "/";
         }
-        else {
-          fileName = name + "/" + (pkg.main || "main");
-        }
+
+        fileName += name + "/" + (pkg.main || "main");
         break;
       }
     }
+    
+    if (!fileName) {
+      fileName = (settings.paths && settings.paths[name]) || name;
+    }
 
     // Once the module has been fully resolved, we finally added to the list of available modules
-    if (settings.shim && settings.shim.hasOwnProperty(name)) {
-      shimName = settings.shim[name].exports || name;
+    if (shim && shim.hasOwnProperty(name)) {
+      shimName = shim[name].exports || name;
       if (root.hasOwnProperty(name)) {
         context.modules[name] = root[name];
       }
@@ -744,7 +740,7 @@
   };
 
   module.exports = Resolver;
-})(window || this);
+})(typeof(window) !== 'undefined' ? window : this);
 
 },{"./file":4,"./registry":9}],12:[function(require,module,exports){
 (function() {
@@ -754,12 +750,12 @@
     this.manager = manager;
   }
 
-  Transformation.prototype.transform = function(_module) {
-    return _module;
+  Transformation.prototype.transform = function(mod) {
+    return mod;
   };
 
   module.exports = Transformation;
-})(window || this);
+})();
 
 },{}],13:[function(require,module,exports){
 (function() {
@@ -857,7 +853,7 @@
     extend: extend,
     merge: merge
   };
-})(window || this);
+})();
 
 },{}]},{},[7])(7)
 });
