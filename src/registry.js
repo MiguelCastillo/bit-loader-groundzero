@@ -1,8 +1,7 @@
-(function(root) {
+(function() {
   "use strict";
 
   var storage = {};
-  root.MLoaderGlobalModule = null;
 
   function Registry() {
   }
@@ -29,4 +28,4 @@
   };
 
   module.exports = Registry;
-})(typeof(window) !== 'undefined' ? window : this);
+})();

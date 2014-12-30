@@ -789,11 +789,10 @@
 })();
 
 },{"./utils":14}],10:[function(require,module,exports){
-(function(root) {
+(function() {
   "use strict";
 
   var storage = {};
-  root.MLoaderGlobalModule = null;
 
   function Registry() {
   }
@@ -820,7 +819,7 @@
   };
 
   module.exports = Registry;
-})(typeof(window) !== 'undefined' ? window : this);
+})();
 
 },{}],11:[function(require,module,exports){
 (function() {
