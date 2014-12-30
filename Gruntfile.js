@@ -14,8 +14,9 @@ module.exports = function(grunt) {
       keepalive: {
         options: {
           port: 8000,
-          host: "*",
-          keepalive: true
+          host: "localhost",
+          keepalive: true,
+          open: "http://localhost:8000/tests/SpecRunner.html"
         }
       }
     },

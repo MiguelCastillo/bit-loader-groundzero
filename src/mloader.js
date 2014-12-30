@@ -9,8 +9,9 @@
       Require        = require('./require'),
       Resolver       = require('./resolver'),
       Registry       = require('./registry'),
-      Fetch          = require('./fetchscript'),
+      Fetch          = require('./fetchxhr'),
       Transformation = require('./transformation'),
+      Ajax           = require('./ajax'),
       Promise        = require('spromise');
 
   function MLoader(options) {
@@ -64,6 +65,7 @@
   MLoader.Utils          = Utils;
   MLoader.Promise        = Promise;
   MLoader.Registry       = Registry;
+  MLoader.Ajax           = Ajax;
   MLoader.Loader         = factory(Loader);
   MLoader.Resolver       = factory(Resolver);
   MLoader.Import         = factory(Import);

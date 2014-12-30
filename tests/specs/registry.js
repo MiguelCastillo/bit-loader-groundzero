@@ -21,10 +21,6 @@ define(["dist/mloader"], function(MLoader) {
           expect(context.modules).to.be.an("object");
         });
 
-        it("then context.anonymous is an aray", function() {
-          expect(context.anonymous).to.be.an("array");
-        });
-
         describe("when reading it from the registry", function() {
           var context, ctx;
           beforeEach(function() {

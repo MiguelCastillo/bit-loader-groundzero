@@ -2,16 +2,16 @@
   "use strict";
 
   var Promise  = require("spromise"),
-      Registry = require("./registry");
+      Define = require("./define");
 
-  function Fetch(_module) {
+  function Fetch(moduleMeta) {
     var deferred = Promise.defer();
     var head     = document.getElementsByTagName("head")[0] || document.documentElement;
     var script   = document.createElement("script");
-    var _url     = _module.file.toUrl();
+    var _url     = moduleMeta.file.toUrl();
 
-    if (_module.urlArgs) {
-      _url += "?" + _module.urlArgs;
+    if (moduleMeta.urlArgs) {
+      _url += "?" + moduleMeta.urlArgs;
     }
 
     script.setAttribute("async",   "true");
@@ -38,23 +38,13 @@
         done = true;
 
         // Collect module information and clear it from the registry.
-        var globalModule = Registry.clearGlobalModule();
-        var mod = globalModule.modules[_module.name];
-
-        // Check if the module was loaded as a named module or an anonymous module.
-        // If it was loaded as an anonymous module, then we need to manually add it
-        // the list of named modules
-        if (!mod && globalModule.anonymous.length) {
-          mod      = globalModule.anonymous.shift();
-          mod.name = _module.name;
-
-          // Make module available as pending resolution so that it can be loaded
-          // whenever it is requested as dependency.
-          globalModule.modules[mod.name] = mod;
-        }
+        moduleMeta.loaded  = Define.clearGlobalModule();
+        moduleMeta.compile = function() {
+          return Define.compile(moduleMeta);
+        };
 
         // Resolve with emtpty string so that moduleMeta can be processed
-        deferred.resolve(globalModule);
+        deferred.resolve(moduleMeta);
 
         // Handle memory leak in IE
         script.onload = script.onreadystatechange = null;

@@ -22,10 +22,13 @@
       this.code = options.code;
     }
 
+    if (options.hasOwnProperty("factory")) {
+      this.factory = options.factory;
+    }
+
     this.type     = options.type;
     this.name     = options.name;
-    this.deps     = (options.deps || []).slice(0);
-    this.factory  = options.factory;
+    this.deps     = options.deps ? options.deps.slice(0) : [];
     this.settings = Utils.merge({}, options);
   }
 

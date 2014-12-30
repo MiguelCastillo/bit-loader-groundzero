@@ -4,7 +4,6 @@
   "curly":true,
   "indent":2,
   "devel":true,
-  "laxcasebreak":true,
   "globals":{
     "require": true,
     "define": true,

@@ -22,6 +22,90 @@
 (function() {
   "use strict";
 
+  var Promise = require('spromise');
+
+  var readyStates = {
+    UNSENT           : 0, // open()has not been called yet.
+    OPENED           : 1, // send()has not been called yet.
+    HEADERS_RECEIVED : 2, // send() has been called, and headers and status are available.
+    LOADING          : 3, // Downloading; responseText holds partial data.
+    DONE             : 4  // The operation is complete.
+  };
+
+
+  function Ajax(options) {
+    if (typeof(options) === "string") {
+      options = {url: options};
+    }
+
+    var deferred     = Promise.defer();
+    var request      = new XMLHttpRequest(),
+        method       = options.method || "GET",
+        url          = options.url,
+        async        = options.async || true,
+        user         = options.user,
+        password     = options.password,
+        data         = options.data || null,
+        headers      = options.headers || {};
+
+    if (!url) {
+      throw new TypeError("Must provide a URL");
+    }
+
+    for (var header in headers) {
+      if (headers.hasOwnProperty(header)) {
+        request.setRequestHeader(header, headers[header]);
+      }
+    }
+
+    if (async) {
+      request.onreadystatechange = StateChanged.bind(request, options, deferred);
+    }
+
+    // Send request
+    request.open(method, url, async, user, password);
+    request.send(data);
+
+    if (!async) {
+      StateChanged.call(request, options, deferred);
+    }
+
+    return deferred.promise;
+  }
+
+
+  function StateChanged(options, deferred) {
+    var request = this,
+        state = request.readyState;
+
+    if (state === readyStates.DONE) {
+      if (request.status === 200) {
+        var result = (options.transform || transform)(request.responseText, options.responseType);
+        deferred.resolve(result, request);
+      }
+      else {
+        deferred.reject(request);
+      }
+    }
+  }
+
+
+  function transform(text, type) {
+    if (type === 'json') {
+      return JSON.parse(text);
+    }
+
+    return text;
+  }
+
+
+  module.exports = Ajax;
+})();
+
+},{"spromise":1}],3:[function(require,module,exports){
+(function(root) {
+  "use strict";
+
   var Module   = require('./module'),
       Registry = require('./registry');
 
@@ -37,7 +121,7 @@
    */
   Define.prototype.define = function () {
     var _module = Define.adapters.apply({}, arguments),
-        context = Registry.getGlobalModule();
+        context = Define.getGlobalModule();
 
     if (_module.name) {
       // Do no allow modules to override other modules...
@@ -68,19 +152,22 @@
   };
 
   Define.adapters.create = function (name, deps, factory) {
-    var _module = {
+    var mod = {
       type: Module.Type.AMD,
       cjs: [],
       name: name,
-      deps: deps,
-      factory: factory
+      deps: deps
     };
 
-    if (typeof(factory) !== "function") {
-      _module.code = factory;
+    if (typeof(factory) === "function") {
+      mod.factory = factory;
+      mod.source  = factory.toString();
+    }
+    else {
+      mod.code = factory;
     }
 
-    return new Module(_module);
+    return new Module(mod);
   };
 
   Define.adapters["/string/object/function"]        = function (name, deps, factory) { return Define.adapters.create(name, deps, factory); };
@@ -93,84 +180,84 @@
   Define.adapters["/number/undefined/undefined"]    = Define.adapters["/object/undefined/undefined"];
   Define.adapters["/undefined/undefined/undefined"] = Define.adapters["/object/undefined/undefined"];
 
-  module.exports = Define;
-})();
+  Define.getGlobalModule = function() {
+    if (!root.DefineGlobalModule) {
+      root.DefineGlobalModule = {
+        modules: {},
+        anonymous: []
+      };
+    }
 
-},{"./module":8,"./registry":9}],3:[function(require,module,exports){
+    return root.DefineGlobalModule;
+  };
+
+  Define.clearGlobalModule = function() {
+    var _module = root.DefineGlobalModule;
+    root.DefineGlobalModule = null;
+    return _module;
+  };
+
+  Define.compile = function(moduleMeta) {
+    var loaded  = moduleMeta.loaded,
+        modules = loaded.modules,
+        mod     = modules[moduleMeta.name];
+
+    // Check if the module was loaded as a named module or an anonymous module.
+    // If it was loaded as an anonymous module, then we need to manually add it
+    // the list of named modules
+    if (!mod && loaded.anonymous && loaded.anonymous.length) {
+      mod      = loaded.anonymous.shift();
+      mod.name = moduleMeta.name;
+
+      // Make module available as pending resolution so that it can be loaded
+      // whenever it is requested as dependency.
+      modules[mod.name] = mod;
+    }
+
+    return modules[mod.name];
+  };
+
+  module.exports = Define;
+})(typeof(window) !== 'undefined' ? window : this);
+
+},{"./module":9,"./registry":10}],4:[function(require,module,exports){
 (function() {
   "use strict";
 
-  var Promise  = require("spromise"),
-      Registry = require("./registry");
+  var Ajax   = require('./ajax'),
+      Define = require('./define');
 
-  function Fetch(_module) {
-    var deferred = Promise.defer();
-    var head     = document.getElementsByTagName("head")[0] || document.documentElement;
-    var script   = document.createElement("script");
-    var _url     = _module.file.toUrl();
+  function Fetch(moduleMeta) {
+    var _url = moduleMeta.file.toUrl();
 
-    if (_module.urlArgs) {
-      _url += "?" + _module.urlArgs;
-    }
+    return (new Ajax(_url)).then(function(source) {
+      moduleMeta.source  = source;
+      moduleMeta.compile = function() {
+        var __header = "",
+            __footer = "",
+            __module = {exports: {}};
 
-    script.setAttribute("async",   "true");
-    script.setAttribute("charset", "utf-8");
-    script.setAttribute("type",    "text/javascript");
-    script.setAttribute("src",     _url);
+        //__header += "'use strict';"; // Make this optional
+        //__header += "debugger;";     // Make this optional
+        __footer += ";//# sourceURL=" + _url;
 
-    //
-    // Code for detecting when the script is done loading was extracted from:
-    // http://stackoverflow.com/questions/4845762/onload-handler-for-script-tag-in-internet-explorer
-    // http://stevesouders.com/efws/script-onload.php
-    //
+        /* jshint -W061, -W054 */
+        (new Function("module", __header + source + __footer))(__module);
+        //(new Function("module", "exports", __header + source + __footer))(__module, __module.exports);
+        /* jshint +W061, +W054 */
 
-    // Handle Script loading
-    var done = false;
+        moduleMeta.loaded = Define.clearGlobalModule();
+        return Define.compile(moduleMeta);
+      };
 
-    // Attach handlers for all browsers
-    script.onload = script.onreadystatechange = function() {
-      if (!done && (!this.readyState ||
-            this.readyState === "loaded" ||
-            this.readyState === "complete")) {
-
-        // We are done...
-        done = true;
-
-        // Collect module information and clear it from the registry.
-        var globalModule = Registry.clearGlobalModule();
-        var mod = globalModule.modules[_module.name];
-
-        // Check if the module was loaded as a named module or an anonymous module.
-        // If it was loaded as an anonymous module, then we need to manually add it
-        // the list of named modules
-        if (!mod && globalModule.anonymous.length) {
-          mod      = globalModule.anonymous.shift();
-          mod.name = _module.name;
-
-          // Make module available as pending resolution so that it can be loaded
-          // whenever it is requested as dependency.
-          globalModule.modules[mod.name] = mod;
-        }
-
-        // Resolve with emtpty string so that moduleMeta can be processed
-        deferred.resolve(globalModule);
-
-        // Handle memory leak in IE
-        script.onload = script.onreadystatechange = null;
-        if (head && script.parentNode) {
-          head.removeChild(script);
-        }
-      }
-    };
-
-    head.appendChild(script);
-    return deferred.promise;
+      return moduleMeta;
+    });
   }
 
   module.exports = Fetch;
 })();
 
-},{"./registry":9,"spromise":1}],4:[function(require,module,exports){
+},{"./ajax":2,"./define":3}],5:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -361,21 +448,34 @@
   module.exports = File;
 })();
 
-},{}],5:[function(require,module,exports){
-(function() {
+},{}],6:[function(require,module,exports){
+(function(root) {
   "use strict";
 
   var Registry = require('./registry'),
       Promise  = require('spromise');
 
+  /**
+   * Module importer.  Primary function is to load Module instances and resolving
+   * their dependencies in order to make the Module fully consumable.
+   */
   function Import(manager) {
     this.manager = manager;
     this.context = (manager && manager.context) || Registry.getById();
   }
 
+  /**
+   * Import is the interface to load up a Module, fully resolving its dependencies,
+   * and caching it to prevent the same module from being processed more than once.
+   *
+   * @param {Array<string> | string} names - module(s) to import
+   *
+   * @returns {Promise}
+   */
   Import.prototype.import = function(names, options) {
     options = options || {};
-    var manager = this.manager,
+    var loader  = this,
+        manager = this.manager,
         context = this.context;
 
     // Coerce string to array to simplify input processing
@@ -386,6 +486,8 @@
     // This logic figures out if the module's dependencies need to be resolved and if
     // they also need to be downloaded.
     var deps = names.map(function(name) {
+      // Search in the options passed in for the module being loaded.  This is how I
+      // allow dependency injection to happen.
       if (options.modules && options.modules.hasOwnProperty(name)) {
         return options.modules[name];
       }
@@ -393,11 +495,12 @@
         return context.modules[name];
       }
 
-      // If the module is not already loaded, then load it.
-      return (context.modules[name] = manager.load(name)
-        .then(function(result) {
-          return (context.modules[name] = result.code);
-        }));
+      // Workflow for loading a module that has not yet been loaded
+      return (context.modules[name] = manager
+        .load(name)
+        .then(dependencies(loader))
+        .then(finalize(loader))
+        .then(cache(loader)));
     });
 
     return Promise.when.apply((void 0), deps).fail(function(error) {
@@ -405,21 +508,85 @@
     });
   };
 
-  module.exports = Import;
-})();
+  /**
+   * Loads up all dependencies for the modules
+   *
+   * @returns {Function} callback to call with the Module instance with the
+   *   dependencies to be resolved
+   */
+  function dependencies(loader) {
+    return function(mod) {
+      // If the module has a property `code` that means the module has already
+      // been fully resolved.
+      if (!mod.deps.length || mod.hasOwnProperty("code")) {
+        return mod;
+      }
 
-},{"./registry":9,"spromise":1}],6:[function(require,module,exports){
+      return new Promise(function(resolve /*, reject*/) {
+        loader.manager.import(mod.deps).then(function() {
+          resolve(mod, arguments);
+        });
+      });
+    };
+  }
+
+  /**
+   * Finalizes the module by calling the `factory` method with any dependencies
+   *
+   * @returns {Function} callback to call with the Module instance to finalize
+   */
+  function finalize() {
+    return function(mod, deps) {
+      if (mod.factory && !mod.hasOwnProperty("code")) {
+        mod.code = mod.factory.apply(root, deps);
+      }
+      return mod;
+    };
+  }
+
+  /**
+   * Adds module to the context to cache it
+   */
+  function cache(loader) {
+    return function(mod) {
+      return (loader.context.modules[name] = mod.code);
+    };
+  }
+
+  module.exports = Import;
+})(typeof(window) !== 'undefined' ? window : this);
+
+},{"./registry":10,"spromise":1}],7:[function(require,module,exports){
 (function() {
   "use strict";
 
   var Promise  = require('spromise'),
       Registry = require('./registry');
 
+  /**
+   * The purpose of Loader is to return full instances of Module.  Module instances
+   * are stored in the context to avoid loading the same module multiple times.
+   * If the module is loaded, then we just return that.  If it has not bee loaded yet,
+   * then we:
+   *
+   * 1. Fetch its source; remote server, local file system... You can specify a fetch
+   *      provider to define how source files are retrieved
+   * 2. Transform the source that was fetched.  This step enables processing of the
+   *      source before it is compiled into an instance of Module.
+   * 3. Compile the source that was fetched and transformed into a proper
+   *      instance of Module
+   */
   function Loader(manager) {
     this.manager = manager;
     this.context = (manager && manager.context) || Registry.getById();
   }
 
+  /**
+   * Handles the process of returning the instance of the Module if one exists, otherwise
+   * the workflow for creating the instance is kicked off.
+   *
+   * @param {string} name - The name of the module to load.
+   */
   Loader.prototype.load = function(name) {
     var loader  = this,
         manager = this.manager,
@@ -429,58 +596,67 @@
       throw new TypeError("Must provide the name of the module to load");
     }
 
+    // If the context does not have a module with the given name, then we go on to
+    // fetch the source and put it through the workflow to create a Module instance.
     if (!context.loaded.hasOwnProperty(name)) {
+      var moduleMeta = manager.resolve(name);
+
+      // This is where the workflow for fetching, transforming, and compiling happens.
+      // It is designed to easily add more steps to the workflow.
       context.loaded[name] = manager
-        .fetch(manager.resolve(name))
-        .then(function(result) {
-          // Copy modules over to the loaded bucket if it does not exist. Anything
-          // that has already been loaded will get ignored.
-          var modules = result.modules;
-          for (var item in modules) {
-            if (modules.hasOwnProperty(item) && !context.loaded.hasOwnProperty(item)) {
-              context.loaded[name] = result.modules[item];
-            }
-          }
-
-          return (context.loaded[name] = result.modules[name]);
-        }, function(err) {return err;});
+        .fetch(moduleMeta)
+        .then(transform(loader))
+        .then(compile(loader));
     }
 
-    return Promise
-      .resolve(context.loaded[name])
-      .then(function(mod) {
-        // If the module has a property `code` that means the module has already
-        // been fully resolved.
-        if (mod.hasOwnProperty("code")) {
-          return mod;
+    return Promise.resolve(context.loaded[name]);
+  };
+
+  /**
+   * The transform enables transformation providers to process the moduleMeta
+   * before it is compiled into an actual Module instance.  This is where steps
+   * such as linting and processing coffee files can take place.
+   */
+  function transform(loader) {
+    return function(moduleMeta) {
+      loader.manager.providers.transformation.transform(moduleMeta);
+      return moduleMeta;
+    };
+  }
+
+  /**
+   * The compile step is to convert the moduleMeta to an instance of Module. The
+   * fetch provider is in charge of adding the compile interface in the moduleMeta
+   * as that is the place with the most knowledge about how the module was loaded
+   * from the server/local file system.
+   */
+  function compile(loader) {
+    return function(moduleMeta) {
+      if (!moduleMeta.compile) {
+        throw new TypeError("ModuleMeta must provide have a `compile` interface");
+      }
+
+      var mod     = moduleMeta.compile(),
+          loaded  = moduleMeta.loaded || {},
+          modules = loaded.modules;
+
+      // Copy modules over to the loaded bucket if it does not exist. Anything
+      // that has already been loaded will get ignored.
+      for (var item in modules) {
+        if (modules.hasOwnProperty(item) && !loader.context.loaded.hasOwnProperty(item)) {
+          loader.context.loaded[item] = modules[item];
         }
+      }
 
-        return loader.finalize(mod);
-      }, function(err) {return err;});
-  };
-
-  Loader.prototype.finalize = function(mod) {
-    var manager = this.manager;
-
-    if (!mod.deps.length) {
-      mod.code = mod.factory();
-      manager.providers.transformation.transform(mod);
-      return mod;
-    }
-
-    return manager
-      .import(mod.deps)
-      .then(function() {
-        mod.code = mod.factory.apply(mod, arguments);
-        manager.providers.transformation.transform(mod);
-        return mod;
-      }, function(err) {return err;});
-  };
+      mod.meta = moduleMeta;
+      return (loader.context.loaded[mod.name] = mod);
+    };
+  }
 
   module.exports = Loader;
-})();
+})(typeof(window) !== 'undefined' ? window : this);
 
-},{"./registry":9,"spromise":1}],7:[function(require,module,exports){
+},{"./registry":10,"spromise":1}],8:[function(require,module,exports){
 (function (root) {
   "use strict";
 
@@ -492,8 +668,9 @@
       Require        = require('./require'),
       Resolver       = require('./resolver'),
       Registry       = require('./registry'),
-      Fetch          = require('./fetchscript'),
+      Fetch          = require('./fetchxhr'),
       Transformation = require('./transformation'),
+      Ajax           = require('./ajax'),
       Promise        = require('spromise');
 
   function MLoader(options) {
@@ -547,6 +724,7 @@
   MLoader.Utils          = Utils;
   MLoader.Promise        = Promise;
   MLoader.Registry       = Registry;
+  MLoader.Ajax           = Ajax;
   MLoader.Loader         = factory(Loader);
   MLoader.Resolver       = factory(Resolver);
   MLoader.Import         = factory(Import);
@@ -571,7 +749,7 @@
   module.exports  = MLoader;
 })(typeof(window) !== 'undefined' ? window : this);
 
-},{"./define":2,"./fetchscript":3,"./file":4,"./import":5,"./loader":6,"./registry":9,"./require":10,"./resolver":11,"./transformation":12,"./utils":13,"spromise":1}],8:[function(require,module,exports){
+},{"./ajax":2,"./define":3,"./fetchxhr":4,"./file":5,"./import":6,"./loader":7,"./registry":10,"./require":11,"./resolver":12,"./transformation":13,"./utils":14,"spromise":1}],9:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -596,10 +774,13 @@
       this.code = options.code;
     }
 
+    if (options.hasOwnProperty("factory")) {
+      this.factory = options.factory;
+    }
+
     this.type     = options.type;
     this.name     = options.name;
-    this.deps     = (options.deps || []).slice(0);
-    this.factory  = options.factory;
+    this.deps     = options.deps ? options.deps.slice(0) : [];
     this.settings = Utils.merge({}, options);
   }
 
@@ -607,7 +788,7 @@
   module.exports = Module;
 })();
 
-},{"./utils":13}],9:[function(require,module,exports){
+},{"./utils":14}],10:[function(require,module,exports){
 (function(root) {
   "use strict";
 
@@ -625,8 +806,7 @@
     return storage[id] || (storage[id] = {
       _id       : id,
       loaded    : {},
-      modules   : {}, // Modules being resolved or already resolved
-      anonymous : []  // Anonymous modules not yet used.  Only used when a modules is being defined
+      modules   : {},
     });
   };
 
@@ -639,27 +819,10 @@
     return _item;
   };
 
-  Registry.getGlobalModule = function() {
-    if (!root.MLoaderGlobalModule) {
-      root.MLoaderGlobalModule = {
-        modules: {},
-        anonymous: []
-      };
-    }
-
-    return root.MLoaderGlobalModule;
-  };
-
-  Registry.clearGlobalModule = function() {
-    var _module = root.MLoaderGlobalModule;
-    root.MLoaderGlobalModule = null;
-    return _module;
-  };
-
   module.exports = Registry;
-})(window || this);
+})(typeof(window) !== 'undefined' ? window : this);
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 (function() {
   "use script";
 
@@ -686,7 +849,7 @@
   module.exports = Require;
 })();
 
-},{"./registry":9,"./utils":13}],11:[function(require,module,exports){
+},{"./registry":10,"./utils":14}],12:[function(require,module,exports){
 (function(root) {
   "use strict";
 
@@ -742,7 +905,7 @@
   module.exports = Resolver;
 })(typeof(window) !== 'undefined' ? window : this);
 
-},{"./file":4,"./registry":9}],12:[function(require,module,exports){
+},{"./file":5,"./registry":10}],13:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -757,7 +920,7 @@
   module.exports = Transformation;
 })();
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -855,5 +1018,5 @@
   };
 })();
 
-},{}]},{},[7])(7)
+},{}]},{},[8])(8)
 });
