@@ -1,16 +1,24 @@
 (function(root) {
   "use strict";
 
-  var Registry = require('./registry'),
-      Promise  = require('spromise');
+  var Promise = require('spromise'),
+      Module  = require('./module');
 
   /**
    * Module importer.  Primary function is to load Module instances and resolving
    * their dependencies in order to make the Module fully consumable.
    */
   function Import(manager) {
+    if (!manager) {
+      throw new TypeError("Must provide a manager");
+    }
+
     this.manager = manager;
-    this.context = (manager && manager.context) || Registry.getById();
+    this.context = manager.context || {};
+
+    if (!this.context.modules) {
+      this.context.modules = {};
+    }
   }
 
   /**
@@ -23,9 +31,9 @@
    */
   Import.prototype.import = function(names, options) {
     options = options || {};
-    var loader  = this,
-        manager = this.manager,
-        context = this.context;
+    var importer = this,
+        manager  = this.manager,
+        context  = this.context;
 
     // Coerce string to array to simplify input processing
     if (typeof(names) === "string") {
@@ -45,17 +53,28 @@
       }
 
       // Workflow for loading a module that has not yet been loaded
-      return (context.modules[name] = manager
-        .load(name)
-        .then(dependencies(loader))
-        .then(finalize(loader))
-        .then(cache(loader)));
+      return (context.modules[name] = manager.load(name)
+        .then(validate,               passThroughError)
+        .then(dependencies(importer), passThroughError)
+        .then(finalize(importer),     passThroughError)
+        .then(cache(importer),        passThroughError));
     });
 
-    return Promise.when.apply((void 0), deps).fail(function(error) {
+    return Promise.when.apply((void 0), deps).catch(function(error) {
       console.error("===> error", error);
     });
   };
+
+  function passThroughError(error) {
+    return error;
+  }
+
+  function validate(mod) {
+    if (mod instanceof(Module) === false) {
+      throw new TypeError("input must be an Instance of Module");
+    }
+    return mod;
+  }
 
   /**
    * Loads up all dependencies for the modules
@@ -63,7 +82,7 @@
    * @returns {Function} callback to call with the Module instance with the
    *   dependencies to be resolved
    */
-  function dependencies(loader) {
+  function dependencies(importer) {
     return function(mod) {
       // If the module has a property `code` that means the module has already
       // been fully resolved.
@@ -72,7 +91,7 @@
       }
 
       return new Promise(function(resolve /*, reject*/) {
-        loader.manager.import(mod.deps).then(function() {
+        importer.import(mod.deps).then(function() {
           resolve(mod, arguments);
         });
       });
@@ -96,9 +115,9 @@
   /**
    * Adds module to the context to cache it
    */
-  function cache(loader) {
+  function cache(importer) {
     return function(mod) {
-      return (loader.context.modules[name] = mod.code);
+      return (importer.context.modules[name] = mod.code);
     };
   }
 
