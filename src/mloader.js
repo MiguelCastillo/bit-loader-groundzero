@@ -1,91 +1,80 @@
-(function (root) {
+(function () {
   "use strict";
 
-  var File           = require('./file'),
-      Utils          = require('./utils'),
-      Loader         = require('./loader'),
-      Define         = require('./define'),
-      Import         = require('./import'),
-      Require        = require('./require'),
-      Resolver       = require('./resolver'),
-      Registry       = require('./registry'),
-      Fetch          = require('./fetchxhr'),
-      Transformation = require('./transformation'),
-      Ajax           = require('./ajax'),
-      Promise        = require('spromise');
+  var Promise  = require('spromise'),
+      Utils    = require('./utils'),
+      Import   = require('./import'),
+      Loader   = require('./loader'),
+      Module   = require('./module'),
+      Registry = require('./registry'),
+      Fetch    = require('./fetch');
 
-  function MLoader(options) {
-    this.settings = Utils.extend({}, MLoader.defaults, options);
-    this.context  = Registry.getById();
+  function MLoader() {
+    this.middlewares = {};
+    this.context     = Registry.getById();
 
+    // Override any of these constructors if you need specialized implementation
     var providers = {
-      loader         : MLoader.Loader(this),
-      resolver       : MLoader.Resolver(this),
-      import         : MLoader.Import(this),
-      require        : MLoader.Require(this),
-      define         : MLoader.Define(this),
-      transformation : MLoader.Transformation(this)
+      fetch   : new MLoader.Fetch(this),
+      loader  : new MLoader.Loader(this),
+      import  : new MLoader.Import(this)
     };
 
     // Expose interfaces
-    this.fetch     = Fetch;
     this.providers = providers;
-    this.define    = providers.define.define.bind(providers.define);
+    this.fetch     = providers.fetch.fetch.bind(providers.fetch);
     this.load      = providers.loader.load.bind(providers.loader);
-    this.resolve   = providers.resolver.resolve.bind(providers.resolver);
     this.import    = providers.import.import.bind(providers.import);
-    this.require   = providers.require.require.bind(providers.require);
   }
+
+  MLoader.prototype.use = function(name, provider) {
+    if (!provider || !provider.handler) {
+      throw new TypeError("Must provide a providers with a `handler` interface");
+    }
+
+    var middleware = this.middlewares[name] || (this.middlewares[name] = []);
+
+    if (typeof(provider) === "function") {
+      provider = {handler: provider};
+    }
+
+    middleware.push(provider);
+  };
+
+  MLoader.prototype.run = function(name) {
+    var middleware = this.middlewares[name],
+        data = Array.prototype.slice.call(arguments, 1),
+        result, i, length;
+
+    if (!middleware) {
+      return;
+    }
+
+    for (i = 0, length = middleware.legnth; i < length; i++) {
+      result = middleware[i].handler.apply(middleware[i], data);
+
+      if (result !== (void 0)) {
+        return result;
+      }
+    }
+  };
 
   MLoader.prototype.clear = function() {
     return Registry.clearById(this.context._id);
   };
 
-  MLoader.prototype.configure = function(options) {
-    Utils.merge(this.settings, options);
-  };
 
-  MLoader.configure = function (options) {
-    Utils.merge(mloader.settings, options);
-    return new MLoader(options);
-  };
-
-  MLoader.defaults = {
-    global: this,
-    baseUrl: "",
-    cache: true,
-    deps: [],
-    paths: {},
-    shim: {},
-    packages: []
-  };
+  MLoader.prototype.Promise = Promise;
+  MLoader.prototype.Module  = Module;
+  MLoader.prototype.Utils   = Utils;
 
   // Expose constructors and utilities
-  MLoader.File           = File;
-  MLoader.Utils          = Utils;
-  MLoader.Promise        = Promise;
-  MLoader.Registry       = Registry;
-  MLoader.Ajax           = Ajax;
-  MLoader.Loader         = factory(Loader);
-  MLoader.Resolver       = factory(Resolver);
-  MLoader.Import         = factory(Import);
-  MLoader.Require        = factory(Require);
-  MLoader.Define         = factory(Define);
-  MLoader.Transformation = factory(Transformation);
-
-  function factory(Constructor) {
-    return function(context) {
-      return new Constructor(context || mloader);
-    };
-  }
-
-  var mloader     = new MLoader(root.require);
-  MLoader.require = mloader.require;
-  MLoader.import  = mloader.import;
-  MLoader.define  = mloader.define;
-
-  // Expose `amd` for modules to properly detect support for `amd`
-  mloader.define.amd = {};
-
-  module.exports  = MLoader;
-})(typeof(window) !== 'undefined' ? window : this);
+  MLoader.Promise  = Promise;
+  MLoader.Utils    = Utils;
+  MLoader.Registry = Registry;
+  MLoader.Loader   = Loader;
+  MLoader.Import   = Import;
+  MLoader.Module   = Module;
+  MLoader.Fetch    = Fetch;
+  module.exports   = MLoader;
+})();

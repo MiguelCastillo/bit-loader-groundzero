@@ -11,20 +11,23 @@
     <!-- polyfill function.bind - phantomjs does not current have it implemented  -->
     <script type="text/javascript" src="bind.js"></script>
 
+    <!-- Load up mocha -->
+    <link rel="stylesheet" href="../node_modules/mocha/mocha.css"/>
+    <script type="text/javascript" src="../node_modules/mocha/mocha.js"></script>
+<!--    <script type="text/javascript" src="//sinonjs.org/releases/sinon-1.12.2.js"></script>-->
+
     <!-- Load global MLoader for integration tests -->
-    <script type="text/javascript" src="../dist/mloader.js"></script>
+<!--
+    <script type="text/javascript" src="../dist/mloader-release.js"></script>
     <script>
       MLoader.config = MLoader.configure;
       var define     = MLoader.define;
       var require    = MLoader.require;
       var requirejs  = MLoader;
     </script>
+-->
 
-    <!-- Load up mocha -->
-    <link rel="stylesheet" href="../node_modules/mocha/mocha.css"/>
-    <script type="text/javascript" src="../node_modules/mocha/mocha.js"></script>
-
-<!--    <script src="../node_modules/requirejs/require.js"></script>-->
+    <script src="../node_modules/requirejs/require.js"></script>
     <script src="requirejs-config.js"></script>
   </head>
 

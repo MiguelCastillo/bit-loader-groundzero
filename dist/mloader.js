@@ -1,4 +1,4 @@
-!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.MLoader=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.mloader=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 /**
  * spromise Copyright (c) 2014 Miguel Castillo.
  * Licensed under MIT
@@ -22,446 +22,38 @@
 (function() {
   "use strict";
 
-  var Promise = require('spromise');
-
-  var readyStates = {
-    UNSENT           : 0, // open()has not been called yet.
-    OPENED           : 1, // send()has not been called yet.
-    HEADERS_RECEIVED : 2, // send() has been called, and headers and status are available.
-    LOADING          : 3, // Downloading; responseText holds partial data.
-    DONE             : 4  // The operation is complete.
-  };
-
-
-  function Ajax(options) {
-    if (typeof(options) === "string") {
-      options = {url: options};
-    }
-
-    var deferred     = Promise.defer();
-    var request      = new XMLHttpRequest(),
-        method       = options.method || "GET",
-        url          = options.url,
-        async        = options.async || true,
-        user         = options.user,
-        password     = options.password,
-        data         = options.data || null,
-        headers      = options.headers || {};
-
-    if (!url) {
-      throw new TypeError("Must provide a URL");
-    }
-
-    for (var header in headers) {
-      if (headers.hasOwnProperty(header)) {
-        request.setRequestHeader(header, headers[header]);
-      }
-    }
-
-    if (async) {
-      request.onreadystatechange = StateChanged.bind(request, options, deferred);
-    }
-
-    // Send request
-    request.open(method, url, async, user, password);
-    request.send(data);
-
-    if (!async) {
-      StateChanged.call(request, options, deferred);
-    }
-
-    return deferred.promise;
+  function Fetch() {
   }
 
-
-  function StateChanged(options, deferred) {
-    var request = this,
-        state = request.readyState;
-
-    if (state === readyStates.DONE) {
-      if (request.status === 200) {
-        var result = (options.transform || transform)(request.responseText, options.responseType);
-        deferred.resolve(result, request);
-      }
-      else {
-        deferred.reject(request);
-      }
-    }
-  }
-
-
-  function transform(text, type) {
-    if (type === 'json') {
-      return JSON.parse(text);
-    }
-
-    return text;
-  }
-
-
-  module.exports = Ajax;
-})();
-
-},{"spromise":1}],3:[function(require,module,exports){
-(function(root) {
-  "use strict";
-
-  var Module   = require('./module'),
-      Registry = require('./registry');
-
-  function Define(manager) {
-    this.manager = manager;
-    this.context = (manager && manager.context) || Registry.getById();
-  }
-
-  /**
-   * AMD compliant define interface
-   * Defines a module to be loaded and consumed by other modules.  Two types of modules
-   * come through here, named and anonymous.
-   */
-  Define.prototype.define = function () {
-    var _module = Define.adapters.apply({}, arguments),
-        context = Define.getGlobalModule();
-
-    if (_module.name) {
-      // Do no allow modules to override other modules...
-      if (context.modules.hasOwnProperty(_module.name)) {
-        throw new Error("Module " + _module.name + " is already defined");
-      }
-      else {
-        context.modules[_module.name] = _module;
-      }
-    }
-    else {
-      context.anonymous.push(_module);
-    }
+  Fetch.prototype.fetch = function(/*name*/) {
+    throw new TypeError("Not implemented");
   };
-
-  /**
-   * Adapter interfaces to define modules
-   */
-  Define.adapters = function (name, deps, factory) {
-    var signature = ["", typeof name, typeof deps, typeof factory].join("/");
-    var adapter   = Define.adapters[signature];
-
-    if (!adapter) {
-      throw new TypeError("Module define signature isn't valid: " + signature);
-    }
-
-    return adapter.apply(this, arguments);
-  };
-
-  Define.adapters.create = function (name, deps, factory) {
-    var mod = {
-      type: Module.Type.AMD,
-      cjs: [],
-      name: name,
-      deps: deps
-    };
-
-    if (typeof(factory) === "function") {
-      mod.factory = factory;
-      mod.source  = factory.toString();
-    }
-    else {
-      mod.code = factory;
-    }
-
-    return new Module(mod);
-  };
-
-  Define.adapters["/string/object/function"]        = function (name, deps, factory) { return Define.adapters.create(name, deps, factory); };
-  Define.adapters["/string/function/undefined"]     = function (name, factory)       { return Define.adapters.create(name, [], factory); };
-  Define.adapters["/object/function/undefined"]     = function (deps, factory)       { return Define.adapters.create(undefined, deps, factory); };
-  Define.adapters["/object/undefined/undefined"]    = function (data)                { return Define.adapters.create(undefined, [], data); };
-  Define.adapters["/string/object/undefined"]       = Define.adapters["/string/function/undefined"];
-  Define.adapters["/function/undefined/undefined"]  = Define.adapters["/object/undefined/undefined"];
-  Define.adapters["/string/undefined/undefined"]    = Define.adapters["/object/undefined/undefined"];
-  Define.adapters["/number/undefined/undefined"]    = Define.adapters["/object/undefined/undefined"];
-  Define.adapters["/undefined/undefined/undefined"] = Define.adapters["/object/undefined/undefined"];
-
-  Define.getGlobalModule = function() {
-    if (!root.DefineGlobalModule) {
-      root.DefineGlobalModule = {
-        modules: {},
-        anonymous: []
-      };
-    }
-
-    return root.DefineGlobalModule;
-  };
-
-  Define.clearGlobalModule = function() {
-    var _module = root.DefineGlobalModule;
-    root.DefineGlobalModule = null;
-    return _module;
-  };
-
-  Define.compile = function(moduleMeta) {
-    var loaded  = moduleMeta.loaded,
-        modules = loaded.modules,
-        mod     = modules[moduleMeta.name];
-
-    // Check if the module was loaded as a named module or an anonymous module.
-    // If it was loaded as an anonymous module, then we need to manually add it
-    // the list of named modules
-    if (!mod && loaded.anonymous && loaded.anonymous.length) {
-      mod      = loaded.anonymous.shift();
-      mod.name = moduleMeta.name;
-
-      // Make module available as pending resolution so that it can be loaded
-      // whenever it is requested as dependency.
-      modules[mod.name] = mod;
-    }
-
-    return modules[mod.name];
-  };
-
-  module.exports = Define;
-})(typeof(window) !== 'undefined' ? window : this);
-
-},{"./module":9,"./registry":10}],4:[function(require,module,exports){
-(function() {
-  "use strict";
-
-  var Ajax   = require('./ajax'),
-      Define = require('./define');
-
-  function Fetch(moduleMeta) {
-    var _url = moduleMeta.file.toUrl();
-
-    return (new Ajax(_url)).then(function(source) {
-      moduleMeta.source  = source;
-      moduleMeta.compile = function() {
-        var __header = "",
-            __footer = "",
-            __module = {exports: {}};
-
-        //__header += "'use strict';"; // Make this optional
-        //__header += "debugger;";     // Make this optional
-        __footer += ";//# sourceURL=" + _url;
-
-        /* jshint -W061, -W054 */
-        (new Function("module", __header + source + __footer))(__module);
-        //(new Function("module", "exports", __header + source + __footer))(__module, __module.exports);
-        /* jshint +W061, +W054 */
-
-        moduleMeta.loaded = Define.clearGlobalModule();
-        return Define.compile(moduleMeta);
-      };
-
-      return moduleMeta;
-    });
-  }
 
   module.exports = Fetch;
 })();
 
-},{"./ajax":2,"./define":3}],5:[function(require,module,exports){
-(function() {
-  "use strict";
-
-  function File (fileUri, baseUri) {
-    var fileName, mergedPath;
-    baseUri = baseUri || "";
-    fileUri = File.parseUri(fileUri);
-
-    if (fileUri.protocol || !baseUri) {
-      fileName = File.parseFileName(fileUri.path);
-    }
-    else {
-      baseUri    = File.parseUri(baseUri);
-      mergedPath = File.mergePaths(fileUri.path, baseUri ? baseUri.path : "/");
-      fileName   = File.parseFileName(mergedPath);
-    }
-
-    this._file    = fileUri;
-    this.protocol = fileUri.protocol ? fileUri.protocol + fileUri.protocolmark : undefined;
-    this.name     = fileName.name;
-    this.path     = fileName.path;
-  }
-
-  File.prototype.toUrl = function (extension) {
-    var file = this;
-    return (file.protocol || "") + (file.path || "") + file.name + (extension || ".js");
-  };
-
-  /**
-   * Parses out uri
-   */
-  File.parseUri = function(uriString) {
-    if (!uriString) {
-      throw new Error("Must provide a string to parse");
-    }
-
-    if (File.isHttpProtocol(uriString)) {
-      return File.parseHttpProtocol(uriString);
-    }
-    else {
-      return File.parseFileProtocol(uriString);
-    }
-  };
-
-  /**
-   * Parses out the string into file components
-   * return {object} file object
-   */
-  File.parseFileProtocol = function (uriString) {
-    var uriParts = /^(?:(file:)(\/\/\/?))?(([A-Za-z-]+:)?[/\\d\w\.\s-]+)/gmi.exec(uriString);
-    uriParts.shift();
-
-    // Make sure we sanitize the slashes
-    if (uriParts[2]) {
-      uriParts[2] = File.normalize(uriParts[2]);
-    }
-
-    return {
-      protocol: uriParts[0],
-      protocolmark: uriParts[1],
-      path: uriParts[2],
-      drive: uriParts[3],
-      href: uriString,
-      uriParts: uriParts
-    };
-  };
-
-  /**
-   * Parses out a string into an http url
-   * @return {object} url object
-   */
-  File.parseHttpProtocol = function (uriString) {
-    var uriParts = /^((https?:)(\/\/)([\d\w\.-]+)(?::(\d+))?)?([\/\\\w\.()-]*)?(?:([?][^#]*)?(#.*)?)*/gmi.exec(uriString);
-    uriParts.shift();
-
-    // Make sure we sanitize the slashes
-    if (uriParts[5]) {
-      uriParts[5] = File.normalize(uriParts[5]);
-    }
-
-    return {
-      origin: uriParts[0],
-      protocol: uriParts[1],
-      protocolmark: uriParts[2],
-      hostname: uriParts[3],
-      port: uriParts[4],
-      path: uriParts[5],
-      search: uriParts[6],
-      hash: uriParts[7],
-      href: uriString,
-      uriParts: uriParts
-    };
-  };
-
-  /**
-   * Tests if a uri has a protocol
-   * @return {boolean} if the uri has a protocol
-   */
-  File.hasProtocol = function (path) {
-    return /^(?:(https?|file)(:\/\/\/?))/g.test(path) === false;
-  };
-
-  /**
-   * Test is the input constains the file protocol delimiter.
-   * @return {boolean} True is it is a file protocol, othterwise false
-   */
-  File.isFileProtocol = function (protocolString) {
-    return /^file:/gmi.test(protocolString);
-  };
-
-  /**
-   * Test is the input constains the http/https protocol delimiter.
-   * @return {boolean} True is it is an http protocol, othterwise false
-   */
-  File.isHttpProtocol = function (protocolString) {
-    return /^https?:/gmi.test(protocolString);
-  };
-
-  /**
-   * Build and file object with the important pieces
-   */
-  File.parseFileName = function (fileString) {
-    var fileName;
-    var pathName = fileString.replace(/([^/]+)$/gmi, function(match) {
-      fileName = match;
-      return "";
-    });
-
-    return {
-      name: fileName,
-      path: pathName
-    };
-  };
-
-  /**
-   * Removes all forward and back slashes to forward slashes as well as all duplicates slashes
-   * and resolve all . and .. in the path.
-   * @param {string} path - Path to normalize
-   * @return {string} path with only one forward slash a path delimters
-   */
-  File.normalize = function (path) {
-    var pathParts = path.replace(/[\\/]+/g, "/").split("/"),
-        pathCount = pathParts.length - 1,
-        skip      = 0,
-        newPath   = [];
-
-    while (pathCount >= 0) {
-      if (pathCount > 0) {
-        if (pathParts[pathCount] === "..") {
-          pathCount -= 1; skip++; continue;
-        }
-        else if (pathParts[pathCount] === ".") {
-          pathCount -= 1; continue;
-        }
-      }
-
-      if (skip) {
-        pathCount -= skip;
-        skip = 0;
-      }
-
-      newPath.unshift(pathParts[pathCount]);
-      pathCount--;
-    }
-
-    return newPath.join('/');
-  };
-
-  /**
-   * Merges a path with a base.  This is used for handling relative paths.
-   * @return {string} Merge path
-   */
-  File.mergePaths = function (path, base) {
-    if (path[0] === '/') {
-      return File.normalize(path);
-    }
-
-    if (base && path) {
-      path = base + "/" + path;
-    }
-    else {
-      path = path || base;
-    }
-
-    return File.normalize(path);
-  };
-
-  module.exports = File;
-})();
-
-},{}],6:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 (function(root) {
   "use strict";
 
-  var Registry = require('./registry'),
-      Promise  = require('spromise');
+  var Promise = require('spromise'),
+      Module  = require('./module');
 
   /**
    * Module importer.  Primary function is to load Module instances and resolving
    * their dependencies in order to make the Module fully consumable.
    */
   function Import(manager) {
+    if (!manager) {
+      throw new TypeError("Must provide a manager");
+    }
+
     this.manager = manager;
-    this.context = (manager && manager.context) || Registry.getById();
+    this.context = manager.context || {};
+
+    if (!this.context.modules) {
+      this.context.modules = {};
+    }
   }
 
   /**
@@ -474,9 +66,9 @@
    */
   Import.prototype.import = function(names, options) {
     options = options || {};
-    var loader  = this,
-        manager = this.manager,
-        context = this.context;
+    var importer = this,
+        manager  = this.manager,
+        context  = this.context;
 
     // Coerce string to array to simplify input processing
     if (typeof(names) === "string") {
@@ -496,17 +88,28 @@
       }
 
       // Workflow for loading a module that has not yet been loaded
-      return (context.modules[name] = manager
-        .load(name)
-        .then(dependencies(loader))
-        .then(finalize(loader))
-        .then(cache(loader)));
+      return (context.modules[name] = manager.load(name)
+        .then(validate,               passThroughError)
+        .then(dependencies(importer), passThroughError)
+        .then(finalize(importer),     passThroughError)
+        .then(cache(importer),        passThroughError));
     });
 
-    return Promise.when.apply((void 0), deps).fail(function(error) {
+    return Promise.when.apply((void 0), deps).catch(function(error) {
       console.error("===> error", error);
     });
   };
+
+  function passThroughError(error) {
+    return error;
+  }
+
+  function validate(mod) {
+    if (mod instanceof(Module) === false) {
+      throw new TypeError("input must be an Instance of Module");
+    }
+    return mod;
+  }
 
   /**
    * Loads up all dependencies for the modules
@@ -514,7 +117,7 @@
    * @returns {Function} callback to call with the Module instance with the
    *   dependencies to be resolved
    */
-  function dependencies(loader) {
+  function dependencies(importer) {
     return function(mod) {
       // If the module has a property `code` that means the module has already
       // been fully resolved.
@@ -523,7 +126,7 @@
       }
 
       return new Promise(function(resolve /*, reject*/) {
-        loader.manager.import(mod.deps).then(function() {
+        importer.import(mod.deps).then(function() {
           resolve(mod, arguments);
         });
       });
@@ -547,21 +150,20 @@
   /**
    * Adds module to the context to cache it
    */
-  function cache(loader) {
+  function cache(importer) {
     return function(mod) {
-      return (loader.context.modules[name] = mod.code);
+      return (importer.context.modules[name] = mod.code);
     };
   }
 
   module.exports = Import;
 })(typeof(window) !== 'undefined' ? window : this);
 
-},{"./registry":10,"spromise":1}],7:[function(require,module,exports){
+},{"./module":6,"spromise":1}],4:[function(require,module,exports){
 (function() {
   "use strict";
 
-  var Promise  = require('spromise'),
-      Registry = require('./registry');
+  var Promise = require('spromise');
 
   /**
    * The purpose of Loader is to return full instances of Module.  Module instances
@@ -569,21 +171,43 @@
    * If the module is loaded, then we just return that.  If it has not bee loaded yet,
    * then we:
    *
-   * 1. Fetch its source; remote server, local file system... You can specify a fetch
+   * 1. Fetch its source; remote server, local file system... You must specify a fetch
    *      provider to define how source files are retrieved
    * 2. Transform the source that was fetched.  This step enables processing of the
    *      source before it is compiled into an instance of Module.
-   * 3. Compile the source that was fetched and transformed into a proper
-   *      instance of Module
+   * 3. Compile the source that was fetched and transformed into a proper instance
+   *      of Module
    */
   function Loader(manager) {
+    if (!manager) {
+      throw new TypeError("Must provide a manager");
+    }
+
     this.manager = manager;
-    this.context = (manager && manager.context) || Registry.getById();
+    this.context = manager.context || {};
+
+    if (!this.context.loaded) {
+      this.context.loaded = {};
+    }
   }
 
   /**
    * Handles the process of returning the instance of the Module if one exists, otherwise
    * the workflow for creating the instance is kicked off.
+   *
+   * The workflow is to take in a module name that needs to be loaded.  If a module with
+   * the given name isn't loaded, then we fetch it.  The fetch call returns a promise, which
+   * when resolved returns a moduleMeta. The moduleMeta is an intermediate object that contains
+   * the module source from fetch and a compile method used for converting the source to an
+   * instance of Module. The purporse for moduleMeta is to allows to process the raw source
+   * with a tranformation pipeline before compiling it to the final product.  The transformation
+   * pipeline allows us to do things like convert coffeescript to javascript.
+   *
+   * Primary workflow:
+   * fetch     -> module name {string}
+   * transform -> module meta {compile:fn, source:string}
+   * compile   -> module meta {compile:fn, source:string}
+   * Module: {deps:array, name:string}
    *
    * @param {string} name - The name of the module to load.
    */
@@ -599,27 +223,45 @@
     // If the context does not have a module with the given name, then we go on to
     // fetch the source and put it through the workflow to create a Module instance.
     if (!context.loaded.hasOwnProperty(name)) {
-      var moduleMeta = manager.resolve(name);
-
       // This is where the workflow for fetching, transforming, and compiling happens.
       // It is designed to easily add more steps to the workflow.
-      context.loaded[name] = manager
-        .fetch(moduleMeta)
-        .then(transform(loader))
-        .then(compile(loader));
+      context.loaded[name] = manager.fetch(name)
+        .then(validate,          passThroughError)
+        .then(transform(loader), passThroughError)
+        .then(compile(loader),   passThroughError);
     }
 
     return Promise.resolve(context.loaded[name]);
   };
+
+
+  function passThroughError(error) {
+    return error;
+  }
+
+  /**
+   * Method to ensure we have a valid module meta object before we continue on with
+   * the rest of the pipeline.
+   */
+  function validate(moduleMeta) {
+    if (!moduleMeta) {
+      throw new TypeError("Must provide a ModuleMeta");
+    }
+
+    if (!moduleMeta.compile) {
+      throw new TypeError("ModuleMeta must provide have a `compile` interface");
+    }
+
+    return moduleMeta;
+  }
 
   /**
    * The transform enables transformation providers to process the moduleMeta
    * before it is compiled into an actual Module instance.  This is where steps
    * such as linting and processing coffee files can take place.
    */
-  function transform(loader) {
+  function transform(/*loader*/) {
     return function(moduleMeta) {
-      loader.manager.providers.transformation.transform(moduleMeta);
       return moduleMeta;
     };
   }
@@ -632,13 +274,8 @@
    */
   function compile(loader) {
     return function(moduleMeta) {
-      if (!moduleMeta.compile) {
-        throw new TypeError("ModuleMeta must provide have a `compile` interface");
-      }
-
       var mod     = moduleMeta.compile(),
-          loaded  = moduleMeta.loaded || {},
-          modules = loaded.modules;
+          modules = moduleMeta.loaded ? moduleMeta.loaded.modules : {};
 
       // Copy modules over to the loaded bucket if it does not exist. Anything
       // that has already been loaded will get ignored.
@@ -656,100 +293,89 @@
   module.exports = Loader;
 })(typeof(window) !== 'undefined' ? window : this);
 
-},{"./registry":10,"spromise":1}],8:[function(require,module,exports){
-(function (root) {
+},{"spromise":1}],5:[function(require,module,exports){
+(function () {
   "use strict";
 
-  var File           = require('./file'),
-      Utils          = require('./utils'),
-      Loader         = require('./loader'),
-      Define         = require('./define'),
-      Import         = require('./import'),
-      Require        = require('./require'),
-      Resolver       = require('./resolver'),
-      Registry       = require('./registry'),
-      Fetch          = require('./fetchxhr'),
-      Transformation = require('./transformation'),
-      Ajax           = require('./ajax'),
-      Promise        = require('spromise');
+  var Promise  = require('spromise'),
+      Utils    = require('./utils'),
+      Import   = require('./import'),
+      Loader   = require('./loader'),
+      Module   = require('./module'),
+      Registry = require('./registry'),
+      Fetch    = require('./fetch');
 
-  function MLoader(options) {
-    this.settings = Utils.extend({}, MLoader.defaults, options);
-    this.context  = Registry.getById();
+  function MLoader() {
+    this.middlewares = {};
+    this.context     = Registry.getById();
 
+    // Override any of these constructors if you need specialized implementation
     var providers = {
-      loader         : MLoader.Loader(this),
-      resolver       : MLoader.Resolver(this),
-      import         : MLoader.Import(this),
-      require        : MLoader.Require(this),
-      define         : MLoader.Define(this),
-      transformation : MLoader.Transformation(this)
+      fetch   : new MLoader.Fetch(this),
+      loader  : new MLoader.Loader(this),
+      import  : new MLoader.Import(this)
     };
 
     // Expose interfaces
-    this.fetch     = Fetch;
     this.providers = providers;
-    this.define    = providers.define.define.bind(providers.define);
+    this.fetch     = providers.fetch.fetch.bind(providers.fetch);
     this.load      = providers.loader.load.bind(providers.loader);
-    this.resolve   = providers.resolver.resolve.bind(providers.resolver);
     this.import    = providers.import.import.bind(providers.import);
-    this.require   = providers.require.require.bind(providers.require);
   }
+
+  MLoader.prototype.use = function(name, provider) {
+    if (!provider || !provider.handler) {
+      throw new TypeError("Must provide a providers with a `handler` interface");
+    }
+
+    var middleware = this.middlewares[name] || (this.middlewares[name] = []);
+
+    if (typeof(provider) === "function") {
+      provider = {handler: provider};
+    }
+
+    middleware.push(provider);
+  };
+
+  MLoader.prototype.run = function(name) {
+    var middleware = this.middlewares[name],
+        data = Array.prototype.slice.call(arguments, 1),
+        result, i, length;
+
+    if (!middleware) {
+      return;
+    }
+
+    for (i = 0, length = middleware.legnth; i < length; i++) {
+      result = middleware[i].handler.apply(middleware[i], data);
+
+      if (result !== (void 0)) {
+        return result;
+      }
+    }
+  };
 
   MLoader.prototype.clear = function() {
     return Registry.clearById(this.context._id);
   };
 
-  MLoader.prototype.configure = function(options) {
-    Utils.merge(this.settings, options);
-  };
 
-  MLoader.configure = function (options) {
-    Utils.merge(mloader.settings, options);
-    return new MLoader(options);
-  };
-
-  MLoader.defaults = {
-    global: this,
-    baseUrl: "",
-    cache: true,
-    deps: [],
-    paths: {},
-    shim: {},
-    packages: []
-  };
+  MLoader.prototype.Promise = Promise;
+  MLoader.prototype.Module  = Module;
+  MLoader.prototype.Utils   = Utils;
 
   // Expose constructors and utilities
-  MLoader.File           = File;
-  MLoader.Utils          = Utils;
-  MLoader.Promise        = Promise;
-  MLoader.Registry       = Registry;
-  MLoader.Ajax           = Ajax;
-  MLoader.Loader         = factory(Loader);
-  MLoader.Resolver       = factory(Resolver);
-  MLoader.Import         = factory(Import);
-  MLoader.Require        = factory(Require);
-  MLoader.Define         = factory(Define);
-  MLoader.Transformation = factory(Transformation);
+  MLoader.Promise  = Promise;
+  MLoader.Utils    = Utils;
+  MLoader.Registry = Registry;
+  MLoader.Loader   = Loader;
+  MLoader.Import   = Import;
+  MLoader.Module   = Module;
+  MLoader.Fetch    = Fetch;
+  module.exports   = MLoader;
+})();
 
-  function factory(Constructor) {
-    return function(context) {
-      return new Constructor(context || mloader);
-    };
-  }
-
-  var mloader     = new MLoader(root.require);
-  MLoader.require = mloader.require;
-  MLoader.import  = mloader.import;
-  MLoader.define  = mloader.define;
-
-  // Expose `amd` for modules to properly detect support for `amd`
-  mloader.define.amd = {};
-
-  module.exports  = MLoader;
-})(typeof(window) !== 'undefined' ? window : this);
-
-},{"./ajax":2,"./define":3,"./fetchxhr":4,"./file":5,"./import":6,"./loader":7,"./registry":10,"./require":11,"./resolver":12,"./transformation":13,"./utils":14,"spromise":1}],9:[function(require,module,exports){
+},{"./fetch":2,"./import":3,"./loader":4,"./module":6,"./registry":7,"./utils":8,"spromise":1}],6:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -788,7 +414,7 @@
   module.exports = Module;
 })();
 
-},{"./utils":14}],10:[function(require,module,exports){
+},{"./utils":8}],7:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -821,105 +447,7 @@
   module.exports = Registry;
 })();
 
-},{}],11:[function(require,module,exports){
-(function() {
-  "use script";
-
-  var Registry = require('./registry'),
-      Utils    = require('./utils');
-
-  function Require(manager) {
-    this.manager = manager;
-    this.context = (manager && manager.context) || Registry.getById();
-  }
-
-  Require.prototype.require = function(name, ready, options) {
-    var manager = this.manager,
-        context = this.context;
-
-    if (context.modules.hasOwnProperty(name)) {
-      return context.modules[name];
-    }
-    else {
-      return manager.import(name, options).done(ready || Utils.noop);
-    }
-  };
-
-  module.exports = Require;
-})();
-
-},{"./registry":10,"./utils":14}],12:[function(require,module,exports){
-(function(root) {
-  "use strict";
-
-  var Registry = require('./registry'),
-      File     = require('./file');
-
-  function Resolver(manager) {
-    this.manager = manager;
-    this.context = (manager && manager.context) ? manager.context : Registry.getById();
-  }
-
-  Resolver.prototype.resolve = function(name) {
-    var i, length, pkg, shimName;
-    var manager  = this.manager,
-        context  = this.context,
-        settings = manager.settings,
-        shim     = settings.shim,
-        packages = settings.packages,
-        fileName = "";
-
-    // Go through the packages and figure if the module is actually configured as such.
-    for (i = 0, length = packages.length; i < length; i++) {
-      pkg = packages[i] || '';
-      if (pkg.name === name || pkg === name) {
-        if (pkg.location) {
-          fileName = pkg.location + "/";
-        }
-
-        fileName += name + "/" + (pkg.main || "main");
-        break;
-      }
-    }
-    
-    if (!fileName) {
-      fileName = (settings.paths && settings.paths[name]) || name;
-    }
-
-    // Once the module has been fully resolved, we finally added to the list of available modules
-    if (shim && shim.hasOwnProperty(name)) {
-      shimName = shim[name].exports || name;
-      if (root.hasOwnProperty(name)) {
-        context.modules[name] = root[name];
-      }
-    }
-
-    return {
-      name: name,
-      file: new File(fileName, settings.baseUrl),
-      urlArgs: settings.urlArgs
-    };
-  };
-
-  module.exports = Resolver;
-})(typeof(window) !== 'undefined' ? window : this);
-
-},{"./file":5,"./registry":10}],13:[function(require,module,exports){
-(function() {
-  "use strict";
-
-  function Transformation(manager) {
-    this.manager = manager;
-  }
-
-  Transformation.prototype.transform = function(mod) {
-    return mod;
-  };
-
-  module.exports = Transformation;
-})();
-
-},{}],14:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 (function() {
   "use strict";
 
@@ -1017,5 +545,5 @@
   };
 })();
 
-},{}]},{},[8])(8)
+},{}]},{},[5])(5)
 });

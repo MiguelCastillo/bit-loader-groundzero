@@ -9,13 +9,11 @@ define([
   mocha.setup("bdd");
 
   require([
-    "tests/specs/file",
     "tests/specs/utils",
     "tests/specs/module",
     "tests/specs/import",
+    "tests/specs/loader",
     "tests/specs/registry",
-    "tests/specs/resolver",
-    "tests/specs/ajax",
     "tests/specs/mloader"
   ], mocha.run);
 });

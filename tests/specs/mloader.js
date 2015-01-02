@@ -1,16 +1,26 @@
 define(["dist/mloader"], function(MLoader) {
-  var mloader;
-  beforeEach(function() {
-    mloader = new MLoader({
-      "baseUrl": "../",
-      "packages": [{
-        "location": "tests",
-        "main": "main",
-        "name": "js"
-      }]
+
+  describe("MLoader Suite", function() {
+    var mloader;
+    beforeEach(function() {
+      mloader = new MLoader({
+        "baseUrl": "../",
+        "packages": [{
+          "location": "tests",
+          "main": "main",
+          "name": "js"
+        }]
+      });
+
+      console.log("------>", mloader);
+    });
+
+    it("Need tests", function() {
+      expect(mloader).to.be.an("object");
     });
   });
 
+  /*
   describe("Modules Integration Suite", function() {
     describe("When Importing an empty object", function() {
       it("then result is an object with no properties", function() {
@@ -76,4 +86,5 @@ define(["dist/mloader"], function(MLoader) {
       });
     });
   });
+  */
 });
